@@ -1,4 +1,4 @@
-module github.com/fenderdigital/terraform-provider-segment
+module github.com/forteilgmbh/terraform-provider-segment
 
 go 1.12
 
