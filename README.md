@@ -19,10 +19,10 @@ resource "segment_destination" "test_destination" {
   destination_name = "google-analytics"
   connection_mode = "CLOUD"
   enabled = false
-  configs = [{
+  configs {
       name = "workspaces/your-workspace/sources/your-source/destinations/google-analytics/config/trackingId"
       type = "string"
       value = "your-tracking-id"
-  }]
+  }
 }
 ```

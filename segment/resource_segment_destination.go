@@ -1,7 +1,9 @@
 package segment
 
 import (
+	"encoding/json"
 	"fmt"
+	"reflect"
 	"strings"
 
 	"github.com/fenderdigital/segment-apis-go/segment"
@@ -89,8 +91,16 @@ func resourceSegmentDestinationRead(r *schema.ResourceData, meta interface{}) er
 	}
 
 	r.Set("enabled", d.Enabled)
-	r.Set("configs", d.Configs)
 	r.Set("connection_mode", d.ConnectionMode)
+
+	configs, err := flattenConfigs(d.Configs)
+	if err != nil {
+		return fmt.Errorf("cannot flatten configs for destination %q; err: %v", r.Id(), err)
+	}
+	err = r.Set("configs", configs)
+	if err != nil {
+		return fmt.Errorf("cannot set configs for destination %q; err: %v", r.Id(), err)
+	}
 
 	return nil
 }
@@ -147,8 +157,16 @@ func resourceSegmentDestinationImport(r *schema.ResourceData, meta interface{}) 
 	r.Set("source_name", srcName)
 	r.Set("destination_name", destName)
 	r.Set("enabled", d.Enabled)
-	r.Set("configs", d.Configs)
 	r.Set("connection_mode", d.ConnectionMode)
+
+	configs, err := flattenConfigs(d.Configs)
+	if err != nil {
+		return nil, fmt.Errorf("cannot flatten configs for destination: %q; err: %v", r.Id(), err)
+	}
+	err = r.Set("configs", configs)
+	if err != nil {
+		return nil, fmt.Errorf("cannot set configs for destination %q; err: %v", r.Id(), err)
+	}
 
 	results := make([]*schema.ResourceData, 1)
 	results[0] = r
@@ -171,4 +189,34 @@ func extractConfigs(s *schema.Set) []segment.DestinationConfig {
 	}
 
 	return configs
+}
+
+func flattenConfigs(dcs []segment.DestinationConfig) ([]interface{}, error) {
+	if dcs != nil {
+		cs := make([]interface{}, len(dcs), len(dcs))
+
+		for i, dc := range dcs {
+			c := make(map[string]interface{})
+
+			if !isNilOrZeroValue(dc.Value) {
+				v, err := json.Marshal(dc.Value)
+				if err != nil {
+					return nil, err
+				}
+				c["value"] = string(v)
+			}
+			c["name"] = dc.Name
+			c["type"] = dc.Type
+
+			cs[i] = c
+		}
+
+		return cs, nil
+	}
+
+	return make([]interface{}, 0), nil
+}
+
+func isNilOrZeroValue(v interface{}) bool {
+	return v == nil || reflect.DeepEqual(v, reflect.Zero(reflect.TypeOf(v)).Interface())
 }
