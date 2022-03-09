@@ -1,6 +1,7 @@
 .EXPORT_ALL_VARIABLES:
-NAME := terraform-provider-segment
-BUILD_DIR := $(shell pwd)/build
+VERSION := 0.2.2
+NAME := terraform-provider-segment_v${VERSION}
+BUILD_DIR := /usr/local/share/terraform/plugins/terraform.bonify.de/forteilgmbh/segment/${VERSION}/linux_amd64
 TARGET := ${BUILD_DIR}/${NAME}
 LDFLAGS ?=
 
