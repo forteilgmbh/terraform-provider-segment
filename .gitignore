@@ -12,3 +12,9 @@
 *.out
 
 .envrc
+
+dist/
+
+# InteliJ
+.idea
+*.iml
