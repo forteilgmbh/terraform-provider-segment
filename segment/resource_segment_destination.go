@@ -182,13 +182,37 @@ func extractConfigs(s *schema.Set) []segment.DestinationConfig {
 			c := segment.DestinationConfig{
 				Name:  config.(map[string]interface{})["name"].(string),
 				Type:  config.(map[string]interface{})["type"].(string),
-				Value: config.(map[string]interface{})["value"],
+				Value: extractValue(config),
 			}
 			configs = append(configs, c)
 		}
 	}
 
 	return configs
+}
+
+func extractValue(config interface{}) interface{} {
+	v := config.(map[string]interface{})["value"]
+
+	if val, err := toJsonObject(v); err == nil {
+		return val
+	}
+	if val, err := toJsonArray(v); err == nil {
+		return val
+	}
+	return v
+}
+
+func toJsonObject(data interface{}) (interface{}, error) {
+	val := new(map[string]interface{})
+	err := json.Unmarshal([]byte(data.(string)), val)
+	return val, err
+}
+
+func toJsonArray(data interface{}) (interface{}, error) {
+	val := new([]interface{})
+	err := json.Unmarshal([]byte(data.(string)), val)
+	return val, err
 }
 
 func flattenConfigs(dcs []segment.DestinationConfig) ([]interface{}, error) {
