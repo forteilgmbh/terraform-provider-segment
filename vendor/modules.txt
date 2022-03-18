@@ -9,8 +9,8 @@ github.com/apparentlymart/go-versions/versions
 github.com/apparentlymart/go-versions/versions/constraints
 # github.com/bmatcuk/doublestar v1.1.5
 github.com/bmatcuk/doublestar
-# github.com/fenderdigital/segment-apis-go v0.2.1-0.20200305212438-17984344db88
-github.com/fenderdigital/segment-apis-go/segment
+# github.com/forteilgmbh/segment-apis-go v0.2.1-0.20220318100219-473efe9abfbb
+github.com/forteilgmbh/segment-apis-go/segment
 # github.com/golang/protobuf v1.3.4
 github.com/golang/protobuf/proto
 github.com/golang/protobuf/protoc-gen-go/descriptor

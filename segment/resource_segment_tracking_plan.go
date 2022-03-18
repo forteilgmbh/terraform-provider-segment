@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/fenderdigital/segment-apis-go/segment"
+	"github.com/forteilgmbh/segment-apis-go/segment"
 	"github.com/hashicorp/terraform/helper/schema"
 )
 
@@ -17,21 +17,33 @@ func resourceSegmentTrackingPlan() *schema.Resource {
 				Required: true,
 				ForceNew: false,
 			},
-			"rules": {
-				Type:     schema.TypeString,
-				Required: true,
-				ForceNew: false,
-				StateFunc: func(val interface{}) string {
-					s := segment.Rules{}
-					json.Unmarshal([]byte(val.(string)), &s)
-					result, _ := json.MarshalIndent(s, "", "  ")
-					return string(result)
-				},
-			},
 			"name": {
 				Type:     schema.TypeString,
 				Computed: true,
 				ForceNew: true,
+			},
+			"rules_global": {
+				Type:      schema.TypeString,
+				Optional:  true,
+				StateFunc: sanitizedSegmentRule,
+			},
+			"rules_identify": {
+				Type:      schema.TypeString,
+				Optional:  true,
+				StateFunc: sanitizedSegmentRule,
+			},
+			"rules_group": {
+				Type:      schema.TypeString,
+				Optional:  true,
+				StateFunc: sanitizedSegmentRule,
+			},
+			"rules_events": {
+				Type:     schema.TypeList,
+				Optional: true,
+				Elem: &schema.Schema{
+					StateFunc: sanitizedSegmentEvent,
+					Type:      schema.TypeString,
+				},
 			},
 		},
 		Create: resourceSegmentTrackingPlanCreate,
@@ -46,14 +58,42 @@ func resourceSegmentTrackingPlan() *schema.Resource {
 
 func resourceSegmentTrackingPlanCreate(r *schema.ResourceData, meta interface{}) error {
 	client := meta.(*segment.Client)
+
 	displayName := r.Get("display_name").(string)
-	rules := r.Get("rules").(string)
-	s := segment.Rules{}
-	json.Unmarshal([]byte(rules), &s)
-	fmt.Printf("%+v\n", s)
-	trackingPlan, err := client.CreateTrackingPlan(displayName, s)
+	rules := &segment.Rules{}
+
+	if tfRule, ok := r.GetOk("rules_global"); ok {
+		rule, err := fromTfStateToRule(tfRule)
+		if err != nil {
+			return fmt.Errorf("error creating tracking plan %q: invalid \"global\" rules: %w", displayName, err)
+		}
+		rules.Global = &rule
+	}
+	if tfRule, ok := r.GetOk("rules_identify"); ok {
+		rule, err := fromTfStateToRule(tfRule)
+		if err != nil {
+			return fmt.Errorf("error creating tracking plan %q: invalid \"identify\" rules: %w", displayName, err)
+		}
+		rules.Identify = &rule
+	}
+	if tfRule, ok := r.GetOk("rules_group"); ok {
+		rule, err := fromTfStateToRule(tfRule)
+		if err != nil {
+			return fmt.Errorf("error creating tracking plan %q: invalid \"group\" rules: %w", displayName, err)
+		}
+		rules.Group = &rule
+	}
+	if tfEvents, ok := r.GetOk("rules_events"); ok {
+		events, err := fromTfStateToEvents(tfEvents)
+		if err != nil {
+			return fmt.Errorf("error creating tracking plan %q: invalid \"events\" rules: %w", displayName, err)
+		}
+		rules.Events = events
+	}
+
+	trackingPlan, err := client.CreateTrackingPlan(displayName, *rules)
 	if err != nil {
-		return fmt.Errorf("ERROR Creating Tracking Plan!! DisplayName: %q; err: %v", displayName, err)
+		return fmt.Errorf("error creating tracking plan %q: %w", displayName, err)
 	}
 
 	planName := parseNameID(trackingPlan.Name)
@@ -64,9 +104,9 @@ func resourceSegmentTrackingPlanCreate(r *schema.ResourceData, meta interface{})
 func resourceSegmentTrackingPlanRead(r *schema.ResourceData, meta interface{}) error {
 	client := meta.(*segment.Client)
 	planName := r.Id()
-	names, err0 := getNameIDs(client)
-	if err0 != nil {
-		return err0
+	names, err := getTrackingPlansNames(client)
+	if err != nil {
+		return fmt.Errorf("error reading tracking plan %q: %w", planName, err)
 	}
 	if _, ok := names[planName]; !ok {
 		r.SetId("")
@@ -74,15 +114,29 @@ func resourceSegmentTrackingPlanRead(r *schema.ResourceData, meta interface{}) e
 	}
 	trackingPlan, err := client.GetTrackingPlan(planName)
 	if err != nil {
-		return fmt.Errorf("ERROR Reading Tracking Plan!! PlanName: %q; err: %v", planName, err)
+		return fmt.Errorf("error reading tracking plan %q: %w", planName, err)
 	}
-	stringRules, err := json.MarshalIndent(trackingPlan.Rules, "", "  ")
-	if err != nil {
-		return err
-	}
+
 	r.Set("display_name", trackingPlan.DisplayName)
-	r.Set("rules", string(stringRules))
 	r.Set("name", planName)
+
+	if _, ok := r.GetOk("rules_global"); ok {
+		r.Set("rules_global", toTfState(trackingPlan.Rules.Global))
+	}
+	if _, ok := r.GetOk("rules_identify"); ok {
+		r.Set("rules_identify", toTfState(trackingPlan.Rules.Identify))
+	}
+	if _, ok := r.GetOk("rules_group"); ok {
+		r.Set("rules_group", toTfState(trackingPlan.Rules.Group))
+	}
+	if _, ok := r.GetOk("rules_events"); ok {
+		events := make([]interface{}, 0, len(trackingPlan.Rules.Events))
+		for _, e := range trackingPlan.Rules.Events {
+			events = append(events, toTfState(e))
+		}
+		r.Set("rules_events", events)
+	}
+
 	return nil
 }
 
@@ -100,39 +154,90 @@ func resourceSegmentTrackingPlanDelete(r *schema.ResourceData, meta interface{})
 func resourceSegmentTrackingPlanUpdate(r *schema.ResourceData, meta interface{}) error {
 	client := meta.(*segment.Client)
 	planName := r.Id()
-	rules := r.Get("rules").(string)
 	displayName := r.Get("display_name").(string)
 
-	paths := []string{"tracking_plan.display_name", "tracking_plan.rules"}
+	names, err := getTrackingPlansNames(client)
+	if err != nil {
+		return fmt.Errorf("error updating tracking plan %q: %w", planName, err)
+	}
+	if _, ok := names[planName]; !ok {
+		return fmt.Errorf("error updating tracking plan %q: plan no longer exists", planName)
+	}
+	trackingPlan, err := client.GetTrackingPlan(planName)
+	if err != nil {
+		return fmt.Errorf("error updating tracking plan %q: %w", planName, err)
+	}
+	rules := trackingPlan.Rules
 
-	s := segment.Rules{}
-	json.Unmarshal([]byte(rules), &s)
+	if tfRule, ok := r.GetOk("rules_global"); ok {
+		rule, err := fromTfStateToRule(tfRule)
+		if err != nil {
+			return fmt.Errorf("error updating tracking plan %q: invalid \"global\" rules: %w", displayName, err)
+		}
+		rules.Global = &rule
+	}
+	if tfRule, ok := r.GetOk("rules_identify"); ok {
+		rule, err := fromTfStateToRule(tfRule)
+		if err != nil {
+			return fmt.Errorf("error updating tracking plan %q: invalid \"identify\" rules: %w", displayName, err)
+		}
+		rules.Identify = &rule
+	}
+	if tfRule, ok := r.GetOk("rules_group"); ok {
+		rule, err := fromTfStateToRule(tfRule)
+		if err != nil {
+			return fmt.Errorf("error updating tracking plan %q: invalid \"group\" rules: %w", displayName, err)
+		}
+		rules.Group = &rule
+	}
+	if tfEvents, ok := r.GetOk("rules_events"); ok {
+		events, err := fromTfStateToEvents(tfEvents)
+		if err != nil {
+			return fmt.Errorf("error updating tracking plan %q: invalid \"events\" rules: %w", displayName, err)
+		}
+		rules.Events = events
+	}
+
+	paths := []string{"tracking_plan.display_name", "tracking_plan.rules"}
 	updatedPlan := segment.TrackingPlan{
 		DisplayName: displayName,
-		Rules:       s,
+		Rules:       rules,
 	}
-	_, err := client.UpdateTrackingPlan(planName, paths, updatedPlan)
+	_, err = client.UpdateTrackingPlan(planName, paths, updatedPlan)
 	if err != nil {
-		return fmt.Errorf("ERROR Updating Tracking Plan!! PlanName: %q; err: %v", planName, err)
+		return fmt.Errorf("error updating tracking plan %q: %w", planName, err)
 	}
 	return resourceSegmentTrackingPlanRead(r, meta)
 }
 
 func resourceSegmentTrackingPlanImport(r *schema.ResourceData, meta interface{}) ([]*schema.ResourceData, error) {
 	client := meta.(*segment.Client)
-	s, err := client.GetTrackingPlan(r.Id())
+	planName := r.Id()
+	names, err := getTrackingPlansNames(client)
 	if err != nil {
-		return nil, fmt.Errorf("invalid tracking plan: %q; err: %v", r.Id(), err)
+		return nil, fmt.Errorf("error importing tracking plan %q: %w", planName, err)
 	}
-	stringRules, err := json.Marshal(s.Rules)
+	if _, ok := names[planName]; !ok {
+		r.SetId("")
+		return nil, fmt.Errorf("error importing tracking plan %q: plan does not exist", planName)
+	}
+	trackingPlan, err := client.GetTrackingPlan(planName)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("error importing tracking plan %q: %w", planName, err)
 	}
-	planName := parseNameID(s.Name)
-	r.SetId(planName)
+
+	r.Set("display_name", trackingPlan.DisplayName)
 	r.Set("name", planName)
-	r.Set("display_name", s.DisplayName)
-	r.Set("rules", stringRules)
+
+	r.Set("rules_global", toTfState(trackingPlan.Rules.Global))
+	r.Set("rules_identify", toTfState(trackingPlan.Rules.Identify))
+	r.Set("rules_group", toTfState(trackingPlan.Rules.Group))
+
+	events := make([]interface{}, 0, len(trackingPlan.Rules.Events))
+	for _, e := range trackingPlan.Rules.Events {
+		events = append(events, toTfState(e))
+	}
+	r.Set("rules_events", events)
 
 	results := make([]*schema.ResourceData, 1)
 	results[0] = r
@@ -145,10 +250,10 @@ func parseNameID(name string) string {
 	return nameSplit[len(nameSplit)-1]
 }
 
-func getNameIDs(client *segment.Client) (map[string]string, error) {
+func getTrackingPlansNames(client *segment.Client) (map[string]string, error) {
 	plans, err := client.ListTrackingPlans()
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("cannot list tracking plans: %w", err)
 	}
 	names := make(map[string]string)
 	for _, element := range plans.TrackingPlans {
@@ -156,4 +261,55 @@ func getNameIDs(client *segment.Client) (map[string]string, error) {
 		names[id] = element.Name
 	}
 	return names, nil
+}
+
+func sanitizedSegmentRule(val interface{}) string {
+	rule, err := fromTfStateToRule(val)
+	if err != nil {
+		panic(err)
+	}
+	return toTfState(rule)
+}
+
+func sanitizedSegmentEvent(val interface{}) string {
+	event, err := fromTfStateToEvent(val)
+	if err != nil {
+		panic(err)
+	}
+	return toTfState(event)
+}
+
+func fromTfStateToRule(v interface{}) (segment.Rule, error) {
+	rule := segment.Rule{}
+	err := json.Unmarshal([]byte(v.(string)), &rule)
+	return rule, err
+}
+
+func fromTfStateToEvents(v interface{}) ([]segment.Event, error) {
+	events := make([]segment.Event, 0)
+	for i, tfEvent := range v.([]interface{}) {
+		event, err := fromTfStateToEvent(tfEvent)
+		if err != nil {
+			return nil, fmt.Errorf("at #%d: %w", i, err)
+		}
+		events = append(events, event)
+	}
+	return events, nil
+}
+
+func fromTfStateToEvent(v interface{}) (segment.Event, error) {
+	event := segment.Event{}
+	err := json.Unmarshal([]byte(v.(string)), &event)
+	return event, err
+}
+
+func toTfState(v interface{}) string {
+	if isNilOrZeroValue(v) {
+		return ""
+	}
+	j, err := json.MarshalIndent(v, "", "  ")
+	if err != nil {
+		panic(err)
+	}
+	return string(j)
 }

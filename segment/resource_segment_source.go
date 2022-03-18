@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/fenderdigital/segment-apis-go/segment"
+	"github.com/forteilgmbh/segment-apis-go/segment"
 	"github.com/hashicorp/terraform/helper/schema"
 )
 

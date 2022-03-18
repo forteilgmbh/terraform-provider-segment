@@ -66,10 +66,10 @@ type TrackingPlan struct {
 
 // Rules contains the information about all the rules of a tracking plan
 type Rules struct {
-	Global         Rule          `json:"global,omitempty"`
+	Global         *Rule         `json:"global,omitempty"`
 	Events         []Event       `json:"events,omitempty"`
-	Identify       Rule          `json:"identify,omitempty"`
-	Group          Rule          `json:"group,omitempty"`
+	Identify       *Rule         `json:"identify,omitempty"`
+	Group          *Rule         `json:"group,omitempty"`
 	IdentifyTraits []interface{} `json:"identify_traits"`
 	GroupTraits    []interface{} `json:"group_traits"`
 }
@@ -91,7 +91,7 @@ type Event struct {
 	Name        string `json:"name,omitempty"`
 	Version     int    `json:"version,omitempty"`
 	Description string `json:"description,omitempty"`
-	Rules       Rule   `json:"rules,omitempty"`
+	Rules       *Rule  `json:"rules,omitempty"`
 }
 
 // DestinationConfig contains information about how a Destination is configured
