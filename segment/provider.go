@@ -23,9 +23,10 @@ func Provider() terraform.ResourceProvider {
 			},
 		},
 		ResourcesMap: map[string]*schema.Resource{
-			"segment_source":        resourceSegmentSource(),
-			"segment_destination":   resourceSegmentDestination(),
-			"segment_tracking_plan": resourceSegmentTrackingPlan(),
+			"segment_source":                          resourceSegmentSource(),
+			"segment_destination":                     resourceSegmentDestination(),
+			"segment_tracking_plan":                   resourceSegmentTrackingPlan(),
+			"segment_tracking_plan_source_connection": resourceSegmentTrackingPlanSourceConnection(),
 		},
 		ConfigureFunc: configureFunc(),
 	}
