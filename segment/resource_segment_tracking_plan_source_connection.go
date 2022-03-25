@@ -5,7 +5,7 @@ import (
 	"strings"
 
 	"github.com/forteilgmbh/segment-apis-go/segment"
-	"github.com/hashicorp/terraform/helper/schema"
+	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 )
 
 func resourceSegmentTrackingPlanSourceConnection() *schema.Resource {
