@@ -1,8 +1,9 @@
-package segment
+package segment_test
 
 import (
 	"fmt"
-	"github.com/forteilgmbh/segment-apis-go/segment"
+	segmentapi "github.com/forteilgmbh/segment-apis-go/segment"
+	"github.com/forteilgmbh/terraform-provider-segment/segment"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/acctest"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/resource"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/terraform"
@@ -11,27 +12,28 @@ import (
 )
 
 func TestAccSegmentSource_basic(t *testing.T) {
-	var sourceBefore segment.Source
-	rName := acctest.RandomWithPrefix("tf-acc-test")
+	var sourceBefore segmentapi.Source
+	srcName := acctest.RandomWithPrefix("tf-testacc-src-basic")
+	catalogName := "catalog/sources/javascript"
 
-	resource.Test(t, resource.TestCase{
+	resource.ParallelTest(t, resource.TestCase{
 		PreCheck:          func() { testAccPreCheck(t) },
 		ProviderFactories: testAccProviders,
 		CheckDestroy:      testAccCheckSegmentSourceDestroy,
 		Steps: []resource.TestStep{
 			{
-				Config: testAccSegmentSourceConfig_basic(rName),
+				Config: testAccSegmentSourceConfig_basic(srcName, catalogName),
 				Check: resource.ComposeTestCheckFunc(
 					testAccCheckSourceExists("segment_source.test", &sourceBefore),
-					resource.TestCheckResourceAttr("segment_source.test", "source_name", rName),
-					resource.TestCheckResourceAttr("segment_source.test", "catalog_name", "catalog/sources/javascript"),
+					resource.TestCheckResourceAttr("segment_source.test", "source_name", srcName),
+					resource.TestCheckResourceAttr("segment_source.test", "catalog_name", catalogName),
 				),
 			},
 		},
 	})
 }
 
-func testAccCheckSourceExists(name string, source *segment.Source) resource.TestCheckFunc {
+func testAccCheckSourceExists(name string, source *segmentapi.Source) resource.TestCheckFunc {
 	return func(s *terraform.State) error {
 		rs, ok := s.RootModule().Resources[name]
 		if !ok {
@@ -41,9 +43,9 @@ func testAccCheckSourceExists(name string, source *segment.Source) resource.Test
 			return fmt.Errorf("source %q has no ID set", name)
 		}
 
-		client := testAccProvider.Meta().(*segment.Client)
+		client := testAccProvider.Meta().(*segmentapi.Client)
 
-		resp, err := client.GetSource(idToName(rs.Primary.ID))
+		resp, err := client.GetSource(segment.IdToName(rs.Primary.ID))
 		if err != nil {
 			return err
 		}
@@ -54,14 +56,14 @@ func testAccCheckSourceExists(name string, source *segment.Source) resource.Test
 }
 
 func testAccCheckSegmentSourceDestroy(s *terraform.State) error {
-	client := testAccProvider.Meta().(*segment.Client)
+	client := testAccProvider.Meta().(*segmentapi.Client)
 
 	for _, rs := range s.RootModule().Resources {
 		if rs.Type != "segment_source" {
 			continue
 		}
 
-		_, err := client.GetSource(idToName(rs.Primary.ID))
+		_, err := client.GetSource(segment.IdToName(rs.Primary.ID))
 
 		if err == nil {
 			return fmt.Errorf("source %q still exists", rs.Primary.ID)
@@ -75,11 +77,11 @@ func testAccCheckSegmentSourceDestroy(s *terraform.State) error {
 	return nil
 }
 
-func testAccSegmentSourceConfig_basic(srcName string) string {
+func testAccSegmentSourceConfig_basic(srcName, catalogName string) string {
 	return fmt.Sprintf(`
 resource "segment_source" "test" {
   source_name  = %q
-  catalog_name = "catalog/sources/javascript"
+  catalog_name = %q
 }
-`, srcName)
+`, srcName, catalogName)
 }

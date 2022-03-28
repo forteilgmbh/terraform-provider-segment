@@ -83,7 +83,7 @@ func resourceSegmentDestinationRead(r *schema.ResourceData, meta interface{}) er
 	client := meta.(*segment.Client)
 	srcName := r.Get("source_name").(string)
 	id := r.Id()
-	destName := idToName(id)
+	destName := IdToName(id)
 
 	d, err := client.GetDestination(srcName, destName)
 	if err != nil {
@@ -111,7 +111,7 @@ func resourceSegmentDestinationUpdate(r *schema.ResourceData, meta interface{}) 
 	configs := r.Get("configs").(*schema.Set)
 	enabled := r.Get("enabled").(bool)
 	id := r.Id()
-	destName := idToName(id)
+	destName := IdToName(id)
 
 	_, err := client.UpdateDestination(srcName, destName, enabled, extractConfigs(configs))
 	if err != nil {
@@ -125,7 +125,7 @@ func resourceSegmentDestinationDelete(r *schema.ResourceData, meta interface{}) 
 	client := meta.(*segment.Client)
 	srcName := r.Get("source_name").(string)
 	id := r.Id()
-	destName := idToName(id)
+	destName := IdToName(id)
 
 	err := client.DeleteDestination(srcName, destName)
 	if err != nil {

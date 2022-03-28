@@ -70,7 +70,7 @@ func resourceSegmentTrackingPlanSourceConnectionDelete(r *schema.ResourceData, m
 	id := r.Id()
 	planId := r.Get("tracking_plan_id").(string)
 	srcName := r.Get("source_name").(string)
-	srcSlug := idToName(id)
+	srcSlug := IdToName(id)
 
 	err := client.DeleteTrackingPlanSourceConnection(planId, srcSlug)
 	if err != nil {

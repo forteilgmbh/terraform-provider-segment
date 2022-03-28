@@ -50,7 +50,7 @@ func resourceSegmentSourceRead(r *schema.ResourceData, meta interface{}) error {
 	client := meta.(*segment.Client)
 	id := r.Id()
 
-	srcName := idToName(id)
+	srcName := IdToName(id)
 
 	s, err := client.GetSource(srcName)
 	if err != nil {
@@ -66,7 +66,7 @@ func resourceSegmentSourceDelete(r *schema.ResourceData, meta interface{}) error
 	client := meta.(*segment.Client)
 	id := r.Id()
 
-	srcName := idToName(id)
+	srcName := IdToName(id)
 
 	err := client.DeleteSource(srcName)
 	if err != nil {
@@ -92,7 +92,7 @@ func resourceSegmentSourceImport(r *schema.ResourceData, meta interface{}) ([]*s
 	return results, nil
 }
 
-func idToName(id string) string {
+func IdToName(id string) string {
 	splitID := strings.Split(id, "/")
 
 	return splitID[len(splitID)-1]
