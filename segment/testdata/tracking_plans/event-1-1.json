@@ -1,0 +1,29 @@
+{
+  "name": "event-1",
+  "version": 1,
+  "rules": {
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "type": "object",
+    "properties": {
+      "context": {
+        "id": "/properties/context"
+      },
+      "traits": {
+        "id": "/properties/traits"
+      },
+      "properties": {
+        "type": "object",
+        "properties": {
+          "amount": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "id": "/properties/properties/properties/amount"
+          }
+        },
+        "id": "/properties/properties"
+      }
+    }
+  }
+}

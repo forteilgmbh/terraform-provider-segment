@@ -304,7 +304,7 @@ func fromTfStateToEvent(v interface{}) (segment.Event, error) {
 }
 
 func toTfState(v interface{}) string {
-	if isNilOrZeroValue(v) {
+	if IsNilOrZeroValue(v) {
 		return ""
 	}
 	j, err := json.MarshalIndent(v, "", "  ")

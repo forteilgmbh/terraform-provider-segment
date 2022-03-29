@@ -222,7 +222,7 @@ func flattenConfigs(dcs []segment.DestinationConfig) ([]interface{}, error) {
 		for i, dc := range dcs {
 			c := make(map[string]interface{})
 
-			if !isNilOrZeroValue(dc.Value) {
+			if !IsNilOrZeroValue(dc.Value) {
 				v, err := json.Marshal(dc.Value)
 				if err != nil {
 					return nil, err
@@ -241,6 +241,6 @@ func flattenConfigs(dcs []segment.DestinationConfig) ([]interface{}, error) {
 	return make([]interface{}, 0), nil
 }
 
-func isNilOrZeroValue(v interface{}) bool {
+func IsNilOrZeroValue(v interface{}) bool {
 	return v == nil || reflect.DeepEqual(v, reflect.Zero(reflect.TypeOf(v)).Interface())
 }

@@ -1,0 +1,35 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "properties": {
+    "context": {
+      "id": "/properties/context"
+    },
+    "traits": {
+      "type": "object",
+      "properties": {
+        "": {
+          "description": "",
+          "type": "object",
+          "id": "/properties/traits/properties/"
+        },
+        "age": {
+          "type": [
+            "integer"
+          ],
+          "id": "/properties/traits/properties/age"
+        },
+        "dateOfBirth": {
+          "type": [
+            "string"
+          ],
+          "id": "/properties/traits/properties/dateOfBirth"
+        }
+      },
+      "id": "/properties/traits"
+    },
+    "properties": {
+      "id": "/properties/properties"
+    }
+  }
+}

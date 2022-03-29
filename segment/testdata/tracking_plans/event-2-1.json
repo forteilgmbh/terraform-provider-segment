@@ -1,0 +1,34 @@
+{
+  "name": "event-2",
+  "version": 1,
+  "rules": {
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "type": "object",
+    "properties": {
+      "context": {
+        "id": "/properties/context"
+      },
+      "traits": {
+        "id": "/properties/traits"
+      },
+      "properties": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": [
+              "string"
+            ],
+            "id": "/properties/properties/properties/name"
+          },
+          "unique_id": {
+            "type": [
+              "number"
+            ],
+            "id": "/properties/properties/properties/unique_id"
+          }
+        },
+        "id": "/properties/properties"
+      }
+    }
+  }
+}
