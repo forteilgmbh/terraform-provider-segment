@@ -219,6 +219,6 @@ func anyDestinationConfigValid(configs []segmentapi.DestinationConfig, predicate
 }
 
 func toJsonString(v interface{}) string {
-	s, _ := json.MarshalIndent(v, "", "  ")
+	s, _ := json.Marshal(v)
 	return string(s)
 }

@@ -172,8 +172,8 @@ func testAccCheckTrackingPlanAttributes(tp *segmentapi.TrackingPlan, displayName
 		if identify == "" && !segment.IsNilOrZeroValue(tp.Rules.Identify) {
 			return fmt.Errorf("non empty Identify rules: %+v", tp.Rules.Identify)
 		}
-		if identify != "" && toJsonString(tp.Rules.Identify) != identify {
-			return fmt.Errorf("invalid Identify rules: expected: %s, actual: %s", identify, toJsonString(tp.Rules.Identify))
+		if identify != "" && toPrettyJsonString(tp.Rules.Identify) != identify {
+			return fmt.Errorf("invalid Identify rules: expected: %s, actual: %s", identify, toPrettyJsonString(tp.Rules.Identify))
 		}
 		if len(eventsFiles) == 0 && !(tp.Rules.Events == nil || len(tp.Rules.Events) == 0) {
 			return fmt.Errorf("non empty Events rules: %+v", tp.Rules.Events)
@@ -184,7 +184,7 @@ func testAccCheckTrackingPlanAttributes(tp *segmentapi.TrackingPlan, displayName
 			}
 			for i := range eventsFiles {
 				exp := eventStringFromFile(eventsFiles[i])
-				act := toJsonString(tp.Rules.Events[i])
+				act := toPrettyJsonString(tp.Rules.Events[i])
 				if act != exp {
 					return fmt.Errorf("invalid Event.%d rule: expected: %s, actual: %s", i, exp, act)
 				}
@@ -255,7 +255,7 @@ func ruleStringFromFile(filename string) string {
 	}
 	rule := segmentapi.Rule{}
 	_ = json.Unmarshal(file, &rule)
-	return toJsonString(rule)
+	return toPrettyJsonString(rule)
 }
 
 func eventFromFile(filename string) segmentapi.Event {
@@ -269,5 +269,10 @@ func eventFromFile(filename string) segmentapi.Event {
 }
 
 func eventStringFromFile(filename string) string {
-	return toJsonString(eventFromFile(filename))
+	return toPrettyJsonString(eventFromFile(filename))
+}
+
+func toPrettyJsonString(v interface{}) string {
+	s, _ := json.MarshalIndent(v, "", "  ")
+	return string(s)
 }
