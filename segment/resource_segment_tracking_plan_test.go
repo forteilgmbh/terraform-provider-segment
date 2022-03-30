@@ -30,7 +30,7 @@ func TestAccSegmentTrackingPlan_authoritative(t *testing.T) {
 					testAccCheckTrackingPlanExists(resourceName, &tp),
 					testAccCheckTrackingPlanAttributes(&tp, rName, "identify-1-1.json", []string{}),
 					resource.TestCheckResourceAttr(resourceName, "display_name", rName),
-					resource.TestCheckResourceAttr(resourceName, "rules_identify", ruleFromFile("identify-1-1.json")),
+					resource.TestCheckResourceAttr(resourceName, "rules_identify", ruleStringFromFile("identify-1-1.json")),
 				),
 			},
 			{
@@ -39,10 +39,10 @@ func TestAccSegmentTrackingPlan_authoritative(t *testing.T) {
 					testAccCheckTrackingPlanExists(resourceName, &tp),
 					testAccCheckTrackingPlanAttributes(&tp, rName, "identify-1-2.json", []string{"event-1-1.json", "event-2-1.json"}),
 					resource.TestCheckResourceAttr(resourceName, "display_name", rName),
-					resource.TestCheckResourceAttr(resourceName, "rules_identify", ruleFromFile("identify-1-2.json")),
+					resource.TestCheckResourceAttr(resourceName, "rules_identify", ruleStringFromFile("identify-1-2.json")),
 					resource.TestCheckResourceAttr(resourceName, "rules_events.#", "2"),
-					resource.TestCheckResourceAttr(resourceName, "rules_events.0", eventFromFile("event-1-1.json")),
-					resource.TestCheckResourceAttr(resourceName, "rules_events.1", eventFromFile("event-2-1.json")),
+					resource.TestCheckResourceAttr(resourceName, "rules_events.0", eventStringFromFile("event-1-1.json")),
+					resource.TestCheckResourceAttr(resourceName, "rules_events.1", eventStringFromFile("event-2-1.json")),
 				),
 			},
 			{
@@ -51,9 +51,9 @@ func TestAccSegmentTrackingPlan_authoritative(t *testing.T) {
 					testAccCheckTrackingPlanExists(resourceName, &tp),
 					testAccCheckTrackingPlanAttributes(&tp, rName, "identify-1-2.json", []string{"event-1-1.json"}),
 					resource.TestCheckResourceAttr(resourceName, "display_name", rName),
-					resource.TestCheckResourceAttr(resourceName, "rules_identify", ruleFromFile("identify-1-2.json")),
+					resource.TestCheckResourceAttr(resourceName, "rules_identify", ruleStringFromFile("identify-1-2.json")),
 					resource.TestCheckResourceAttr(resourceName, "rules_events.#", "1"),
-					resource.TestCheckResourceAttr(resourceName, "rules_events.0", eventFromFile("event-1-1.json")),
+					resource.TestCheckResourceAttr(resourceName, "rules_events.0", eventStringFromFile("event-1-1.json")),
 				),
 			},
 		},
@@ -62,7 +62,55 @@ func TestAccSegmentTrackingPlan_authoritative(t *testing.T) {
 
 // some rules managed with Terraform, some managed outside
 func TestAccSegmentTrackingPlan_nonauthoritative(t *testing.T) {
+	var tp segmentapi.TrackingPlan
+	rName := acctest.RandomWithPrefix("tf-testacc-tp-nonauth")
+	resourceName := "segment_tracking_plan.test"
 
+	resource.ParallelTest(t, resource.TestCase{
+		PreCheck:          func() { testAccPreCheck(t) },
+		ProviderFactories: testAccProviders,
+		CheckDestroy:      testAccCheckSegmentTrackingPlanDestroy,
+		Steps: []resource.TestStep{
+			// regular setup
+			{
+				Config: testAccSegmentTrackingPlanConfig_identify(rName, "identify-1-1.json"),
+				Check: resource.ComposeTestCheckFunc(
+					testAccCheckTrackingPlanExists(resourceName, &tp),
+					testAccCheckTrackingPlanAttributes(&tp, rName, "identify-1-1.json", []string{}),
+					resource.TestCheckResourceAttr(resourceName, "display_name", rName),
+					resource.TestCheckResourceAttr(resourceName, "rules_identify", ruleStringFromFile("identify-1-1.json")),
+					testAccUpdateTrackingPlan(resourceName, &tp, []string{"event-1-1.json", "event-2-1.json"}),
+				),
+			},
+			// modify the tracking plan: add "events" rules but there should be no changes afterwards
+			{
+				Config: testAccSegmentTrackingPlanConfig_identify(rName, "identify-1-1.json"),
+				Check: resource.ComposeTestCheckFunc(
+					testAccCheckTrackingPlanExists(resourceName, &tp),
+					resource.TestCheckResourceAttr(resourceName, "display_name", rName),
+					resource.TestCheckResourceAttr(resourceName, "rules_identify", ruleStringFromFile("identify-1-1.json")),
+					// "events" are set in the actual tracking plan
+					testAccCheckTrackingPlanAttributes(&tp, rName, "identify-1-1.json", []string{"event-1-1.json", "event-2-1.json"}),
+					// but they are not managed in state
+					resource.TestCheckResourceAttr(resourceName, "rules_events.#", "0"),
+				),
+			},
+			// the unmanaged rules should not be modified while modifying the managed ones
+			{
+				Config: testAccSegmentTrackingPlanConfig_identify(rName, "identify-1-2.json"),
+				Check: resource.ComposeTestCheckFunc(
+					testAccCheckTrackingPlanExists(resourceName, &tp),
+					resource.TestCheckResourceAttr(resourceName, "display_name", rName),
+					// "identify" are updated by Terraform,
+					resource.TestCheckResourceAttr(resourceName, "rules_identify", ruleStringFromFile("identify-1-2.json")),
+					// while "events" are still, unmodified, in the actual tracking plan
+					testAccCheckTrackingPlanAttributes(&tp, rName, "identify-1-2.json", []string{"event-1-1.json", "event-2-1.json"}),
+					// and still not managed in state
+					resource.TestCheckResourceAttr(resourceName, "rules_events.#", "0"),
+				),
+			},
+		},
+	})
 }
 
 func testAccCheckSegmentTrackingPlanDestroy(s *terraform.State) error {
@@ -110,7 +158,7 @@ func testAccCheckTrackingPlanExists(name string, tp *segmentapi.TrackingPlan) re
 }
 
 func testAccCheckTrackingPlanAttributes(tp *segmentapi.TrackingPlan, displayName string, identifyFile string, eventsFiles []string) resource.TestCheckFunc {
-	identify := ruleFromFile(identifyFile)
+	identify := ruleStringFromFile(identifyFile)
 	return func(s *terraform.State) error {
 		if tp.DisplayName != displayName {
 			return fmt.Errorf("invalid displayName: expected: %q, actual: %q", displayName, tp.DisplayName)
@@ -135,7 +183,7 @@ func testAccCheckTrackingPlanAttributes(tp *segmentapi.TrackingPlan, displayName
 				return fmt.Errorf("invalid numver of Events rules: expected: %d, actual: %d (%+v)", len(eventsFiles), len(tp.Rules.Events), tp.Rules.Events)
 			}
 			for i := range eventsFiles {
-				exp := eventFromFile(eventsFiles[i])
+				exp := eventStringFromFile(eventsFiles[i])
 				act := toJsonString(tp.Rules.Events[i])
 				if act != exp {
 					return fmt.Errorf("invalid Event.%d rule: expected: %s, actual: %s", i, exp, act)
@@ -155,13 +203,13 @@ resource "segment_tracking_plan" "test" {
 %s
 EOF
 }
-`, rName, ruleFromFile(rulesFile))
+`, rName, ruleStringFromFile(rulesFile))
 }
 
 func testAccSegmentTrackingPlanConfig_identify_events(rName, identifyFile string, eventsFiles []string) string {
 	events := make([]string, 0, len(eventsFiles))
 	for _, f := range eventsFiles {
-		events = append(events, fmt.Sprintf("<<-EOF\n%s\nEOF\n", eventFromFile(f)))
+		events = append(events, fmt.Sprintf("<<-EOF\n%s\nEOF\n", eventStringFromFile(f)))
 	}
 	return fmt.Sprintf(`
 resource "segment_tracking_plan" "test" {
@@ -174,13 +222,33 @@ EOF
 %s
   ]
 }
-`, rName, ruleFromFile(identifyFile), strings.Join(events, ","))
+`, rName, ruleStringFromFile(identifyFile), strings.Join(events, ","))
 }
 
-//go:embed testdata
+func testAccUpdateTrackingPlan(name string, tp *segmentapi.TrackingPlan, eventsFiles []string) resource.TestCheckFunc {
+	return func(s *terraform.State) error {
+		rs := s.RootModule().Resources[name]
+
+		events := make([]segmentapi.Event, 0, len(eventsFiles))
+		for _, f := range eventsFiles {
+			events = append(events, eventFromFile(f))
+		}
+
+		client := testAccProvider.Meta().(*segmentapi.Client)
+		paths := []string{"tracking_plan.display_name", "tracking_plan.rules"}
+		tp.Rules.Events = events
+		_, err := client.UpdateTrackingPlan(rs.Primary.ID, paths, *tp)
+		if err != nil {
+			return fmt.Errorf("error updating tracking plan %q: %w", tp.Name, err)
+		}
+		return nil
+	}
+}
+
+//go:embed testdata/tracking_plans
 var trackingPlans embed.FS
 
-func ruleFromFile(filename string) string {
+func ruleStringFromFile(filename string) string {
 	file, err := trackingPlans.ReadFile("testdata/tracking_plans/" + filename)
 	if err != nil {
 		panic(err)
@@ -190,12 +258,16 @@ func ruleFromFile(filename string) string {
 	return toJsonString(rule)
 }
 
-func eventFromFile(filename string) string {
+func eventFromFile(filename string) segmentapi.Event {
 	file, err := trackingPlans.ReadFile("testdata/tracking_plans/" + filename)
 	if err != nil {
 		panic(err)
 	}
 	event := segmentapi.Event{}
 	_ = json.Unmarshal(file, &event)
-	return toJsonString(event)
+	return event
+}
+
+func eventStringFromFile(filename string) string {
+	return toJsonString(eventFromFile(filename))
 }
