@@ -158,7 +158,7 @@ func testAccCheckDestinationAttributes_webhook(destination *segmentapi.Destinati
 
 func testAccSegmentDestinationConfig_webhook(srcName string, workspaceSlug string, enabled bool, endpoint string) string {
 	return configCompose(
-		testAccSegmentSourceConfig_basic(srcName, "catalog/sources/javascript"),
+		testAccSegmentSourceConfig_basic(srcName, "catalog/sources/net"),
 		fmt.Sprintf(`
 resource "segment_destination" "test" {
   source_name      = segment_source.test.source_name

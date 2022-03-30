@@ -14,7 +14,7 @@ import (
 func TestAccSegmentSource_basic(t *testing.T) {
 	var sourceBefore segmentapi.Source
 	srcName := acctest.RandomWithPrefix("tf-testacc-src-basic")
-	catalogName := "catalog/sources/javascript"
+	catalogName := "catalog/sources/net"
 
 	resource.ParallelTest(t, resource.TestCase{
 		PreCheck:          func() { testAccPreCheck(t) },

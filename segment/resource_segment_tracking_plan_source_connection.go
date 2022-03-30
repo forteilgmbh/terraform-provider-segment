@@ -48,9 +48,9 @@ func resourceSegmentTrackingPlanSourceConnectionCreate(r *schema.ResourceData, m
 
 func resourceSegmentTrackingPlanSourceConnectionRead(r *schema.ResourceData, meta interface{}) error {
 	client := meta.(*segment.Client)
-	planId, srcName := splitTrackingPlanSourceConnectionId(r.Id())
+	planId, srcName := SplitTrackingPlanSourceConnectionId(r.Id())
 
-	ok, err := findTrackingPlanSourceConnection(client, planId, srcName)
+	ok, err := FindTrackingPlanSourceConnection(client, planId, srcName)
 	if err != nil {
 		return fmt.Errorf("error reading TrackingPlanSourceConnection: %w", err)
 	}
@@ -82,9 +82,9 @@ func resourceSegmentTrackingPlanSourceConnectionDelete(r *schema.ResourceData, m
 
 func resourceSegmentTrackingPlanSourceConnectionImport(r *schema.ResourceData, meta interface{}) ([]*schema.ResourceData, error) {
 	client := meta.(*segment.Client)
-	planId, srcName := splitTrackingPlanSourceConnectionId(r.Id())
+	planId, srcName := SplitTrackingPlanSourceConnectionId(r.Id())
 
-	ok, err := findTrackingPlanSourceConnection(client, planId, srcName)
+	ok, err := FindTrackingPlanSourceConnection(client, planId, srcName)
 	if err != nil {
 		return nil, fmt.Errorf("error importing TrackingPlanSourceConnection: %w", err)
 	}
@@ -106,12 +106,12 @@ func createTrackingPlanSourceConnectionId(planId, srcName string) string {
 	return fmt.Sprintf("%s|%s", planId, srcName)
 }
 
-func splitTrackingPlanSourceConnectionId(id string) (planId, srcName string) {
+func SplitTrackingPlanSourceConnectionId(id string) (planId, srcName string) {
 	s := strings.SplitN(id, "|", 2)
 	return s[0], s[1]
 }
 
-func findTrackingPlanSourceConnection(client *segment.Client, planId, srcName string) (bool, error) {
+func FindTrackingPlanSourceConnection(client *segment.Client, planId, srcName string) (bool, error) {
 	trackingPlanSourceConnections, err := client.ListTrackingPlanSourceConnections(planId)
 	if err != nil {
 		return false, fmt.Errorf("cannot fetch source connections for tracking plan %q: %w", planId, err)
