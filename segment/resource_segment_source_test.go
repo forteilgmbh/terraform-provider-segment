@@ -2,7 +2,7 @@ package segment_test
 
 import (
 	"fmt"
-	segmentapi "github.com/forteilgmbh/segment-apis-go/segment"
+	segmentapi "github.com/forteilgmbh/segment-config-go/segment"
 	"github.com/forteilgmbh/terraform-provider-segment/segment"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/acctest"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/resource"

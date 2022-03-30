@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/forteilgmbh/segment-apis-go/segment"
+	"github.com/forteilgmbh/segment-config-go/segment"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 )
 
@@ -35,12 +35,13 @@ func resourceSegmentTrackingPlanSourceConnectionCreate(r *schema.ResourceData, m
 	client := meta.(*segment.Client)
 	planId := r.Get("tracking_plan_id").(string)
 	srcName := r.Get("source_name").(string)
+	srcSlug := IdToName(srcName)
 
-	plan, err := client.CreateTrackingPlanSourceConnection(planId, srcName)
+	err := client.CreateTrackingPlanSourceConnection(planId, srcSlug)
 	if err != nil {
 		return fmt.Errorf("error creating TrackingPlanSourceConnection: TrackingPlan: %q; Source: %q; err: %v", planId, srcName, err)
 	}
-	id := createTrackingPlanSourceConnectionId(plan.TrackingPlanID, plan.SourceName)
+	id := createTrackingPlanSourceConnectionId(planId, srcName)
 	r.SetId(id)
 
 	return resourceSegmentTrackingPlanSourceConnectionRead(r, meta)
@@ -112,12 +113,12 @@ func SplitTrackingPlanSourceConnectionId(id string) (planId, srcName string) {
 }
 
 func FindTrackingPlanSourceConnection(client *segment.Client, planId, srcName string) (bool, error) {
-	trackingPlanSourceConnections, err := client.ListTrackingPlanSourceConnections(planId)
+	trackingPlanSourceConnections, err := client.ListTrackingPlanSources(planId)
 	if err != nil {
 		return false, fmt.Errorf("cannot fetch source connections for tracking plan %q: %w", planId, err)
 	}
-	for _, sc := range trackingPlanSourceConnections.Connections {
-		if sc.TrackingPlanID == planId && sc.SourceName == srcName {
+	for _, sc := range trackingPlanSourceConnections {
+		if sc.TrackingPlanId == planId && sc.Source == srcName {
 			return true, nil
 		}
 	}

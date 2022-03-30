@@ -3,7 +3,7 @@ package segment_test
 import (
 	"encoding/json"
 	"fmt"
-	segmentapi "github.com/forteilgmbh/segment-apis-go/segment"
+	segmentapi "github.com/forteilgmbh/segment-config-go/segment"
 	"github.com/forteilgmbh/terraform-provider-segment/segment"
 	"github.com/google/go-cmp/cmp"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/acctest"

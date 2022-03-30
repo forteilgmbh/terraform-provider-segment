@@ -49,8 +49,8 @@ github.com/envoyproxy/protoc-gen-validate v0.1.0/go.mod h1:iSmxcyjqTsJpI2R4NaDN7
 github.com/fatih/color v1.7.0 h1:DkWD4oS2D8LGGgTQ6IvwJJXSL5Vp2ffcQg58nFV38Ys=
 github.com/fatih/color v1.7.0/go.mod h1:Zm6kSWBoL9eyXnKyktHP6abPY2pDugNf5KwzbycvMj4=
 github.com/flynn/go-shlex v0.0.0-20150515145356-3f9db97f8568/go.mod h1:xEzjJPgXI435gkrCt3MPfRiAkVrwSbHsst4LCFVfpJc=
-github.com/forteilgmbh/segment-apis-go v0.2.1-0.20220318100219-473efe9abfbb h1:Hf7Pr/LiNl79eC1OdbV7YYXgr9EeUoiytXrmQt/xCXs=
-github.com/forteilgmbh/segment-apis-go v0.2.1-0.20220318100219-473efe9abfbb/go.mod h1:2ea2knQkqAuZTQ5pApqL9mQTaObhgvKNIoGYGBnz4wE=
+github.com/forteilgmbh/segment-config-go v0.2.1-0.20220330130005-3b60d06c1881 h1:aoOx66WNlyM45s3rxLNFGSMph2C0T3z/j2wf7Oknb1I=
+github.com/forteilgmbh/segment-config-go v0.2.1-0.20220330130005-3b60d06c1881/go.mod h1:TJL/Tb91lvJFiPB/hgx+UgZaTDujksgkAi/CReozbRk=
 github.com/ghodss/yaml v1.0.0/go.mod h1:4dBDuWmgqj2HViK6kFavaiC9ZROes6MMH2rRYeMEF04=
 github.com/gliderlabs/ssh v0.2.2/go.mod h1:U7qILu1NlMHj9FlMhZLlkCdDnU1DBEAqr0aevW3Awn0=
 github.com/go-git/gcfg v1.5.0 h1:Q5ViNfGF8zFgyJWPqYwA7qGFoMTEiBmdlkcfRmpIMa4=

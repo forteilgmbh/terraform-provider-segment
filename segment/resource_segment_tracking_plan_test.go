@@ -4,7 +4,7 @@ import (
 	"embed"
 	"encoding/json"
 	"fmt"
-	segmentapi "github.com/forteilgmbh/segment-apis-go/segment"
+	segmentapi "github.com/forteilgmbh/segment-config-go/segment"
 	"github.com/forteilgmbh/terraform-provider-segment/segment"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/acctest"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/resource"
@@ -235,9 +235,8 @@ func testAccUpdateTrackingPlan(name string, tp *segmentapi.TrackingPlan, eventsF
 		}
 
 		client := testAccProvider.Meta().(*segmentapi.Client)
-		paths := []string{"tracking_plan.display_name", "tracking_plan.rules"}
 		tp.Rules.Events = events
-		_, err := client.UpdateTrackingPlan(rs.Primary.ID, paths, *tp)
+		_, err := client.UpdateTrackingPlan(rs.Primary.ID, *tp)
 		if err != nil {
 			return fmt.Errorf("error updating tracking plan %q: %w", tp.Name, err)
 		}
@@ -253,7 +252,7 @@ func ruleStringFromFile(filename string) string {
 	if err != nil {
 		panic(err)
 	}
-	rule := segmentapi.Rule{}
+	rule := segmentapi.Rules{}
 	_ = json.Unmarshal(file, &rule)
 	return toPrettyJsonString(rule)
 }

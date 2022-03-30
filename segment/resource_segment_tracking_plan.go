@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/forteilgmbh/segment-apis-go/segment"
+	"github.com/forteilgmbh/segment-config-go/segment"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 )
 
@@ -60,7 +60,7 @@ func resourceSegmentTrackingPlanCreate(r *schema.ResourceData, meta interface{})
 	client := meta.(*segment.Client)
 
 	displayName := r.Get("display_name").(string)
-	rules := &segment.Rules{}
+	rules := &segment.RuleSet{}
 
 	if tfRule, ok := r.GetOk("rules_global"); ok {
 		rule, err := fromTfStateToRule(tfRule)
@@ -91,7 +91,7 @@ func resourceSegmentTrackingPlanCreate(r *schema.ResourceData, meta interface{})
 		rules.Events = events
 	}
 
-	trackingPlan, err := client.CreateTrackingPlan(displayName, *rules)
+	trackingPlan, err := client.CreateTrackingPlan(segment.TrackingPlan{DisplayName: displayName, Rules: *rules})
 	if err != nil {
 		return fmt.Errorf("error creating tracking plan %q: %w", displayName, err)
 	}
@@ -198,12 +198,11 @@ func resourceSegmentTrackingPlanUpdate(r *schema.ResourceData, meta interface{})
 		rules.Events = events
 	}
 
-	paths := []string{"tracking_plan.display_name", "tracking_plan.rules"}
 	updatedPlan := segment.TrackingPlan{
 		DisplayName: displayName,
 		Rules:       rules,
 	}
-	_, err = client.UpdateTrackingPlan(planName, paths, updatedPlan)
+	_, err = client.UpdateTrackingPlan(planName, updatedPlan)
 	if err != nil {
 		return fmt.Errorf("error updating tracking plan %q: %w", planName, err)
 	}
@@ -279,8 +278,8 @@ func sanitizedSegmentEvent(val interface{}) string {
 	return toTfState(event)
 }
 
-func fromTfStateToRule(v interface{}) (segment.Rule, error) {
-	rule := segment.Rule{}
+func fromTfStateToRule(v interface{}) (segment.Rules, error) {
+	rule := segment.Rules{}
 	err := json.Unmarshal([]byte(v.(string)), &rule)
 	return rule, err
 }
