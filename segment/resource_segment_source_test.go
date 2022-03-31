@@ -7,14 +7,43 @@ import (
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/acctest"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/resource"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/terraform"
-	"os"
-	"strings"
+	"regexp"
 	"testing"
 )
 
 func TestAccSegmentSource_basic(t *testing.T) {
 	var source segmentapi.Source
-	srcName := acctest.RandomWithPrefix("tf-testacc-src-basic")
+	srcSlug := acctest.RandomWithPrefix("tf-testacc-src-basic")
+	catalogName := "catalog/sources/net"
+	sourceNameRegexp, _ := regexp.Compile("^workspaces/[a-z0-9._-]+/sources/[a-z0-9._-]+$")
+
+	resource.ParallelTest(t, resource.TestCase{
+		PreCheck:          func() { testAccPreCheck(t) },
+		ProviderFactories: testAccProviders,
+		CheckDestroy:      testAccCheckSegmentSourceDestroy,
+		Steps: []resource.TestStep{
+			{
+				Config: testAccSegmentSourceConfig_basic(srcSlug, catalogName),
+				Check: resource.ComposeTestCheckFunc(
+					testAccCheckSourceExists("segment_source.test", &source),
+					resource.TestMatchResourceAttr("segment_source.test", "id", sourceNameRegexp),
+					resource.TestCheckResourceAttr("segment_source.test", "slug", srcSlug),
+					resource.TestCheckResourceAttr("segment_source.test", "catalog_name", catalogName),
+					testAccCheckSourceAttributes_basic(&source, srcSlug, catalogName),
+				),
+			},
+			{
+				ResourceName:      "segment_source.test",
+				ImportState:       true,
+				ImportStateVerify: true,
+			},
+		},
+	})
+}
+
+func TestAccSegmentSource_disappears(t *testing.T) {
+	var source segmentapi.Source
+	srcSlug := acctest.RandomWithPrefix("tf-testacc-src-disappears")
 	catalogName := "catalog/sources/net"
 
 	resource.ParallelTest(t, resource.TestCase{
@@ -23,13 +52,12 @@ func TestAccSegmentSource_basic(t *testing.T) {
 		CheckDestroy:      testAccCheckSegmentSourceDestroy,
 		Steps: []resource.TestStep{
 			{
-				Config: testAccSegmentSourceConfig_basic(srcName, catalogName),
+				Config: testAccSegmentSourceConfig_basic(srcSlug, catalogName),
 				Check: resource.ComposeTestCheckFunc(
 					testAccCheckSourceExists("segment_source.test", &source),
-					resource.TestCheckResourceAttr("segment_source.test", "source_name", srcName),
-					resource.TestCheckResourceAttr("segment_source.test", "catalog_name", catalogName),
-					testAccCheckSourceAttributes_basic(&source, os.Getenv("SEGMENT_WORKSPACE"), srcName, catalogName),
+					testAccCheckSourceDisappears(&source),
 				),
+				ExpectNonEmptyPlan: true,
 			},
 		},
 	})
@@ -43,12 +71,12 @@ func testAccCheckSegmentSourceDestroy(s *terraform.State) error {
 			continue
 		}
 
-		_, err := client.GetSource(segment.IdToName(rs.Primary.ID))
+		_, err := client.GetSource(segment.SourceNameToSlug(rs.Primary.ID))
 
 		if err == nil {
 			return fmt.Errorf("source %q still exists", rs.Primary.ID)
 		}
-		if strings.Contains(err.Error(), "the requested uri does not exist") {
+		if segment.IsNotFoundErr(err) {
 			return nil
 		}
 		return err
@@ -69,7 +97,7 @@ func testAccCheckSourceExists(name string, source *segmentapi.Source) resource.T
 
 		client := testAccProvider.Meta().(*segmentapi.Client)
 
-		resp, err := client.GetSource(segment.IdToName(rs.Primary.ID))
+		resp, err := client.GetSource(segment.SourceNameToSlug(rs.Primary.ID))
 		if err != nil {
 			return err
 		}
@@ -79,11 +107,20 @@ func testAccCheckSourceExists(name string, source *segmentapi.Source) resource.T
 	}
 }
 
-func testAccCheckSourceAttributes_basic(source *segmentapi.Source, ws string, srcName string, catalogName string) resource.TestCheckFunc {
+func testAccCheckSourceDisappears(source *segmentapi.Source) resource.TestCheckFunc {
 	return func(s *terraform.State) error {
-		fullname := fmt.Sprintf("workspaces/%s/sources/%s", ws, srcName)
-		if source.Name != fullname {
-			return fmt.Errorf("invalid source.Name: expected: %q, actual: %q", fullname, source.Name)
+		client := testAccProvider.Meta().(*segmentapi.Client)
+		err := client.DeleteSource(segment.SourceNameToSlug(source.Name))
+		return err
+	}
+}
+
+func testAccCheckSourceAttributes_basic(source *segmentapi.Source, srcSlug string, catalogName string) resource.TestCheckFunc {
+	return func(s *terraform.State) error {
+		client := testAccProvider.Meta().(*segmentapi.Client)
+
+		if source.Name != segment.SourceSlugToName(client.Workspace, srcSlug) {
+			return fmt.Errorf("invalid source.Name: expected: %q, actual: %q", segment.SourceSlugToName(client.Workspace, srcSlug), source.Name)
 		}
 		if source.CatalogName != catalogName {
 			return fmt.Errorf("invalid source.CatalogName: expected: %q, actual: %q", catalogName, source.CatalogName)
@@ -95,7 +132,7 @@ func testAccCheckSourceAttributes_basic(source *segmentapi.Source, ws string, sr
 func testAccSegmentSourceConfig_basic(srcName, catalogName string) string {
 	return fmt.Sprintf(`
 resource "segment_source" "test" {
-  source_name  = %q
+  slug         = %q
   catalog_name = %q
 }
 `, srcName, catalogName)

@@ -1,99 +1,103 @@
 package segment
 
 import (
+	"context"
 	"fmt"
-	"strings"
-
 	"github.com/forteilgmbh/segment-config-go/segment"
+	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
+	"strings"
 )
 
 func resourceSegmentSource() *schema.Resource {
 	return &schema.Resource{
 		Schema: map[string]*schema.Schema{
-			"source_name": {
-				Type:     schema.TypeString,
-				Required: true,
-				ForceNew: true,
+			"slug": {
+				Description: `Short name of the source (e.g. "ios")`,
+				Type:        schema.TypeString,
+				Required:    true,
+				ForceNew:    true,
 			},
 			"catalog_name": {
-				Type:     schema.TypeString,
-				Required: true,
-				ForceNew: true,
+				Description: "Catalog name of the source",
+				Type:        schema.TypeString,
+				Required:    true,
+				ForceNew:    true,
 			},
 		},
-		Create: resourceSegmentSourceCreate,
-		Read:   resourceSegmentSourceRead,
-		Delete: resourceSegmentSourceDelete,
+		CreateContext: resourceSegmentSourceCreate,
+		ReadContext:   resourceSegmentSourceRead,
+		DeleteContext: resourceSegmentSourceDelete,
 		Importer: &schema.ResourceImporter{
-			State: resourceSegmentSourceImport,
+			StateContext: schema.ImportStatePassthroughContext,
 		},
 	}
 }
 
-func resourceSegmentSourceCreate(r *schema.ResourceData, meta interface{}) error {
+func resourceSegmentSourceCreate(c context.Context, r *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	client := meta.(*segment.Client)
-	srcName := r.Get("source_name").(string)
+
+	slug := r.Get("slug").(string)
 	catName := r.Get("catalog_name").(string)
 
-	source, err := client.CreateSource(srcName, catName)
+	source, err := client.CreateSource(slug, catName)
 	if err != nil {
-		return fmt.Errorf("ERROR Creating Source!! Source: %q; Catalog: %q; err: %v", srcName, catName, err)
+		return diag.FromErr(err)
 	}
 
 	r.SetId(source.Name)
 
-	return resourceSegmentSourceRead(r, meta)
+	return resourceSegmentSourceRead(c, r, meta)
 }
 
-func resourceSegmentSourceRead(r *schema.ResourceData, meta interface{}) error {
+func resourceSegmentSourceRead(c context.Context, r *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	client := meta.(*segment.Client)
-	id := r.Id()
 
-	srcName := IdToName(id)
+	name := r.Id()
+	slug := SourceNameToSlug(name)
 
-	s, err := client.GetSource(srcName)
+	s, err := client.GetSource(slug)
 	if err != nil {
-		return fmt.Errorf("ERROR Reading Source!! Source: %q; err: %v", srcName, err)
+		if IsNotFoundErr(err) {
+			r.SetId("")
+			return nil
+		} else {
+			return diag.FromErr(err)
+		}
 	}
 
-	r.Set("catalog_name", s.CatalogName)
-
-	return nil
-}
-
-func resourceSegmentSourceDelete(r *schema.ResourceData, meta interface{}) error {
-	client := meta.(*segment.Client)
-	id := r.Id()
-
-	srcName := IdToName(id)
-
-	err := client.DeleteSource(srcName)
-	if err != nil {
-		return fmt.Errorf("ERROR Deleting Source!! Source: %q; err: %v", srcName, err)
+	if err := r.Set("slug", slug); err != nil {
+		return diag.FromErr(err)
+	}
+	if err := r.Set("catalog_name", s.CatalogName); err != nil {
+		return diag.FromErr(err)
 	}
 
 	return nil
 }
 
-func resourceSegmentSourceImport(r *schema.ResourceData, meta interface{}) ([]*schema.ResourceData, error) {
+func resourceSegmentSourceDelete(c context.Context, r *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	client := meta.(*segment.Client)
-	s, err := client.GetSource(r.Id())
+	name := r.Id()
+
+	err := client.DeleteSource(SourceNameToSlug(name))
 	if err != nil {
-		return nil, fmt.Errorf("invalid source: %q; err: %v", r.Id(), err)
+		return diag.FromErr(err)
 	}
 
-	r.SetId(s.Name)
-	r.Set("catalog_name", s.CatalogName)
-
-	results := make([]*schema.ResourceData, 1)
-	results[0] = r
-
-	return results, nil
+	return nil
 }
 
 func IdToName(id string) string {
 	splitID := strings.Split(id, "/")
 
 	return splitID[len(splitID)-1]
+}
+
+func SourceSlugToName(workspace, slug string) string {
+	return fmt.Sprintf("workspaces/%s/sources/%s", workspace, slug)
+}
+
+func SourceNameToSlug(name string) string {
+	return strings.SplitN(name, "/", 4)[3]
 }
