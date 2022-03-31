@@ -9,64 +9,68 @@ import (
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/acctest"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/resource"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/terraform"
-	"os"
-	"strings"
 	"testing"
 )
 
 func TestAccSegmentDestination_webhook(t *testing.T) {
 	resourceName := "segment_destination.test"
-	srcName := acctest.RandomWithPrefix("tf-testacc-dst-webhook")
+	srcSlug := acctest.RandomWithPrefix("tf-testacc-dst-webhook")
 
 	resource.ParallelTest(t, resource.TestCase{
 		PreCheck:          func() { testAccPreCheck(t) },
 		ProviderFactories: testAccProviders,
 		CheckDestroy:      testAccCheckSegmentDestinationDestroy,
 		Steps: []resource.TestStep{
-			testAccSegmentDestinationStep_webhook(resourceName, srcName, true, "https://example.com/api/v1"),
-			testAccSegmentDestinationStep_webhook(resourceName, srcName, false, "https://example.com/api/v1"),
-			testAccSegmentDestinationStep_webhook(resourceName, srcName, false, "https://example.com/api/v2"),
-			testAccSegmentDestinationStep_webhook(resourceName, srcName, true, "https://example.com/api/v1"),
+			testAccSegmentDestinationStep_webhook(resourceName, srcSlug, true, "https://example.com/api/v1"),
+			testAccSegmentDestinationStep_webhook(resourceName, srcSlug, false, "https://example.com/api/v1"),
+			testAccSegmentDestinationStep_webhook(resourceName, srcSlug, false, "https://example.com/api/v2"),
+			testAccSegmentDestinationStep_webhook(resourceName, srcSlug, true, "https://example.com/api/v1"),
+			{
+				ResourceName:      "segment_destination.test",
+				ImportState:       true,
+				ImportStateVerify: true,
+			},
 		},
 	})
 }
 
-func testAccSegmentDestinationStep_webhook(resourceName string, srcName string, enabled bool, endpoint string) resource.TestStep {
+func testAccSegmentDestinationStep_webhook(resourceName string, srcSlug string, enabled bool, endpoint string) resource.TestStep {
 	var destination segmentapi.Destination
-	dstName := "webhooks"
-	ws := os.Getenv("SEGMENT_WORKSPACE")
-	configBaseName := fmt.Sprintf("workspaces/%s/sources/%s/destinations/webhooks/config/", ws, srcName)
-	globalHook := map[string]string{
-		"name":  configBaseName + "globalHook",
-		"value": "",
-		"type":  "string",
-	}
-	hooks := map[string]string{
-		"name":  configBaseName + "hooks",
-		"value": toJsonString(testAccSegmentDestination_webhookConfigsHooksValue(endpoint)),
-		"type":  "mixed",
-	}
-	sharedSecret := map[string]string{
-		"name":  configBaseName + "sharedSecret",
-		"value": "",
-		"type":  "string",
-	}
+	slug := "webhooks"
 
 	return resource.TestStep{
-		Config: testAccSegmentDestinationConfig_webhook(srcName, ws, enabled, endpoint),
+		Config: testAccSegmentDestinationConfig_webhook(srcSlug, enabled, endpoint),
 		Check: resource.ComposeTestCheckFunc(
 			testAccCheckDestinationExists(resourceName, &destination),
-			testAccCheckDestinationAttributes_webhook(&destination, ws, srcName, enabled, endpoint),
-			resource.TestCheckResourceAttr(resourceName, "source_name", srcName),
-			resource.TestCheckResourceAttr(resourceName, "destination_name", dstName),
+			testAccCheckDestinationAttributes_webhook(resourceName, &destination, enabled, endpoint),
+			resource.TestCheckResourceAttr(resourceName, "slug", slug),
+			resource.TestCheckResourceAttr(resourceName, "source_slug", srcSlug),
 			resource.TestCheckResourceAttr(resourceName, "connection_mode", "UNSPECIFIED"),
 			resource.TestCheckResourceAttr(resourceName, "enabled", fmt.Sprintf("%t", enabled)),
-			resource.TestCheckResourceAttr(resourceName, "configs.#", "3"),
-			resource.TestCheckTypeSetElemNestedAttrs(resourceName, "configs.*", globalHook),
-			resource.TestCheckTypeSetElemNestedAttrs(resourceName, "configs.*", hooks),
-			resource.TestCheckTypeSetElemNestedAttrs(resourceName, "configs.*", sharedSecret),
+			testAccCheckDestinationConfigs_webhook(resourceName, srcSlug, endpoint),
 		),
 	}
+}
+
+func TestAccSegmentDestination_disappears(t *testing.T) {
+	var destination segmentapi.Destination
+	srcSlug := acctest.RandomWithPrefix("tf-testacc-dst-disappears")
+
+	resource.ParallelTest(t, resource.TestCase{
+		PreCheck:          func() { testAccPreCheck(t) },
+		ProviderFactories: testAccProviders,
+		CheckDestroy:      testAccCheckSegmentDestinationDestroy,
+		Steps: []resource.TestStep{
+			{
+				Config: testAccSegmentDestinationConfig_webhook(srcSlug, true, "https://example.com/api/v1"),
+				Check: resource.ComposeTestCheckFunc(
+					testAccCheckDestinationExists("segment_destination.test", &destination),
+					testAccCheckDestinationDisappears(&destination),
+				),
+				ExpectNonEmptyPlan: true,
+			},
+		},
+	})
 }
 
 func testAccCheckSegmentDestinationDestroy(s *terraform.State) error {
@@ -76,17 +80,15 @@ func testAccCheckSegmentDestinationDestroy(s *terraform.State) error {
 		if rs.Type != "segment_destination" {
 			continue
 		}
-		srcName, ok := rs.Primary.Attributes["source_name"]
-		if !ok {
-			return fmt.Errorf("destination %q has no attribute \"source_name\"", rs.Primary.ID)
-		}
+		slug := segment.DestinationNameToSlug(rs.Primary.ID)
+		srcSlug := segment.DestinationNameToSourceSlug(rs.Primary.ID)
 
-		_, err := client.GetDestination(srcName, segment.IdToName(rs.Primary.ID))
+		_, err := client.GetDestination(srcSlug, slug)
 
 		if err == nil {
 			return fmt.Errorf("destination %q still exists", rs.Primary.ID)
 		}
-		if strings.Contains(err.Error(), "the requested uri does not exist") {
+		if segment.IsNotFoundErr(err) {
 			return nil
 		}
 		return err
@@ -104,14 +106,12 @@ func testAccCheckDestinationExists(name string, destination *segmentapi.Destinat
 		if rs.Primary.ID == "" {
 			return fmt.Errorf("destination %q has no ID set", name)
 		}
-		srcName, ok := rs.Primary.Attributes["source_name"]
-		if !ok {
-			return fmt.Errorf("destination %q has no attribute \"source_name\"", name)
-		}
-
 		client := testAccProvider.Meta().(*segmentapi.Client)
 
-		resp, err := client.GetDestination(srcName, segment.IdToName(rs.Primary.ID))
+		slug := segment.DestinationNameToSlug(rs.Primary.ID)
+		srcSlug := segment.DestinationNameToSourceSlug(rs.Primary.ID)
+
+		resp, err := client.GetDestination(srcSlug, slug)
 		if err != nil {
 			return err
 		}
@@ -121,11 +121,23 @@ func testAccCheckDestinationExists(name string, destination *segmentapi.Destinat
 	}
 }
 
-func testAccCheckDestinationAttributes_webhook(destination *segmentapi.Destination, ws string, srcName string, enabled bool, endpoint string) resource.TestCheckFunc {
+func testAccCheckDestinationDisappears(destination *segmentapi.Destination) resource.TestCheckFunc {
 	return func(s *terraform.State) error {
-		fullname := fmt.Sprintf("workspaces/%s/sources/%s/destinations/webhooks", ws, srcName)
-		if destination.Name != fullname {
-			return fmt.Errorf("invalid destination.Name: expected: %q, actual: %q", fullname, destination.Name)
+		client := testAccProvider.Meta().(*segmentapi.Client)
+
+		slug := segment.DestinationNameToSlug(destination.Name)
+		srcSlug := segment.DestinationNameToSourceSlug(destination.Name)
+
+		return client.DeleteDestination(srcSlug, slug)
+	}
+}
+
+func testAccCheckDestinationAttributes_webhook(name string, destination *segmentapi.Destination, enabled bool, endpoint string) resource.TestCheckFunc {
+	return func(s *terraform.State) error {
+		rs := s.RootModule().Resources[name]
+
+		if destination.Name != rs.Primary.ID {
+			return fmt.Errorf("invalid destination.Name: expected: %q, actual: %q", rs.Primary.ID, destination.Name)
 		}
 		if destination.ConnectionMode != "UNSPECIFIED" {
 			return fmt.Errorf("invalid destination.Name: expected: %q, actual: %q", "UNSPECIFIED", destination.ConnectionMode)
@@ -137,18 +149,18 @@ func testAccCheckDestinationAttributes_webhook(destination *segmentapi.Destinati
 			return fmt.Errorf("invalid size of destination.Configs: expected: %d actual: %d", 3, len(destination.Configs))
 		}
 		if !anyDestinationConfigValid(destination.Configs, func(c segmentapi.DestinationConfig) bool {
-			return c.Name == fullname+"/config/globalHook" && c.Type == "string" && c.Value == ""
+			return c.Name == rs.Primary.ID+"/config/globalHook" && c.Type == "string" && c.Value == ""
 		}) {
 			return fmt.Errorf("not found correct Config (globalHook) in destination.Configs: %+v", destination.Configs)
 		}
 		if !anyDestinationConfigValid(destination.Configs, func(c segmentapi.DestinationConfig) bool {
-			return c.Name == fullname+"/config/hooks" && c.Type == "mixed" &&
+			return c.Name == rs.Primary.ID+"/config/hooks" && c.Type == "mixed" &&
 				cmp.Equal(c.Value, testAccSegmentDestination_webhookConfigsHooksValue(endpoint))
 		}) {
 			return fmt.Errorf("not found correct Config (hooks) in destination.Configs: %+v", destination.Configs)
 		}
 		if !anyDestinationConfigValid(destination.Configs, func(c segmentapi.DestinationConfig) bool {
-			return c.Name == fullname+"/config/sharedSecret" && c.Type == "string" && c.Value == ""
+			return c.Name == rs.Primary.ID+"/config/sharedSecret" && c.Type == "string" && c.Value == ""
 		}) {
 			return fmt.Errorf("not found correct Config (sharedSecret) in destination.Configs: %+v", destination.Configs)
 		}
@@ -156,26 +168,56 @@ func testAccCheckDestinationAttributes_webhook(destination *segmentapi.Destinati
 	}
 }
 
-func testAccSegmentDestinationConfig_webhook(srcName string, workspaceSlug string, enabled bool, endpoint string) string {
+func testAccCheckDestinationConfigs_webhook(resourceName, srcSlug, endpoint string) resource.TestCheckFunc {
+	return func(s *terraform.State) error {
+		client := testAccProvider.Meta().(*segmentapi.Client)
+
+		configBaseName := fmt.Sprintf("workspaces/%s/sources/%s/destinations/webhooks/config/", client.Workspace, srcSlug)
+		globalHook := map[string]string{
+			"name":  configBaseName + "globalHook",
+			"value": "",
+			"type":  "string",
+		}
+		hooks := map[string]string{
+			"name":  configBaseName + "hooks",
+			"value": toJsonString(testAccSegmentDestination_webhookConfigsHooksValue(endpoint)),
+			"type":  "mixed",
+		}
+		sharedSecret := map[string]string{
+			"name":  configBaseName + "sharedSecret",
+			"value": "",
+			"type":  "string",
+		}
+
+		return resource.ComposeTestCheckFunc(
+			resource.TestCheckResourceAttr(resourceName, "configs.#", "3"),
+			resource.TestCheckTypeSetElemNestedAttrs(resourceName, "configs.*", globalHook),
+			resource.TestCheckTypeSetElemNestedAttrs(resourceName, "configs.*", hooks),
+			resource.TestCheckTypeSetElemNestedAttrs(resourceName, "configs.*", sharedSecret),
+		)(s)
+	}
+}
+
+func testAccSegmentDestinationConfig_webhook(srcSlug string, enabled bool, endpoint string) string {
 	return configCompose(
-		testAccSegmentSourceConfig_basic(srcName, "catalog/sources/net"),
+		testAccSegmentSourceConfig_basic(srcSlug, "catalog/sources/net"),
 		fmt.Sprintf(`
 resource "segment_destination" "test" {
-  source_name      = segment_source.test.source_name
-  destination_name = "webhooks"
+  slug             = "webhooks"  
+  source_slug      = segment_source.test.slug
   connection_mode  = "UNSPECIFIED"
-  enabled          = %[2]t
+  enabled          = %t
 
   configs {
-    name  = "workspaces/%[1]s/sources/${segment_source.test.source_name}/destinations/webhooks/config/globalHook"
+    name  = "${segment_source.test.id}/destinations/webhooks/config/globalHook"
     value = ""
     type  = "string"
   }
   configs {
-    name = "workspaces/%[1]s/sources/${segment_source.test.source_name}/destinations/webhooks/config/hooks"
+    name = "${segment_source.test.id}/destinations/webhooks/config/hooks"
     value = jsonencode([
       {
-        hook = %[3]q
+        hook = %q
         headers = [
           {
             "key"   = "Authorization"
@@ -187,12 +229,12 @@ resource "segment_destination" "test" {
     type = "mixed"
   }
   configs {
-    name  = "workspaces/%[1]s/sources/${segment_source.test.source_name}/destinations/webhooks/config/sharedSecret"
+    name  = "${segment_source.test.id}/destinations/webhooks/config/sharedSecret"
     value = ""
     type  = "string"
   }
 }
-`, workspaceSlug, enabled, endpoint),
+`, enabled, endpoint),
 	)
 }
 
