@@ -56,6 +56,15 @@ func TestAccSegmentTrackingPlan_authoritative(t *testing.T) {
 					resource.TestCheckResourceAttr(resourceName, "rules_events.0", eventStringFromFile("event-1-1.json")),
 				),
 			},
+			{
+				ResourceName:            "segment_tracking_plan.test",
+				ImportState:             true,
+				ImportStateVerify:       true,
+				ImportStateVerifyIgnore: []string{"rules_global", "rules_identify", "rules_group", "rules_events"},
+				// Rules cannot be imported as the resource attributes determine what kinds of rules should be managed
+				// by Terraform (attribute is set) and what should be left without changes (attribute is null).
+				// As a consequence, apply is required after import.
+			},
 		},
 	})
 }
@@ -109,6 +118,37 @@ func TestAccSegmentTrackingPlan_nonauthoritative(t *testing.T) {
 					resource.TestCheckResourceAttr(resourceName, "rules_events.#", "0"),
 				),
 			},
+			{
+				ResourceName:            "segment_tracking_plan.test",
+				ImportState:             true,
+				ImportStateVerify:       true,
+				ImportStateVerifyIgnore: []string{"rules_global", "rules_identify", "rules_group", "rules_events"},
+				// Rules cannot be imported as the resource attributes determine what kinds of rules should be managed
+				// by Terraform (attribute is set) and what should be left without changes (attribute is null).
+				// As a consequence, apply is required after import.
+			},
+		},
+	})
+}
+
+func TestAccSegmentTrackingPlan_disappears(t *testing.T) {
+	var tp segmentapi.TrackingPlan
+	rName := acctest.RandomWithPrefix("tf-testacc-tp-disappears")
+	resourceName := "segment_tracking_plan.test"
+
+	resource.ParallelTest(t, resource.TestCase{
+		PreCheck:          func() { testAccPreCheck(t) },
+		ProviderFactories: testAccProviders,
+		CheckDestroy:      testAccCheckSegmentTrackingPlanDestroy,
+		Steps: []resource.TestStep{
+			{
+				Config: testAccSegmentTrackingPlanConfig_identify(rName, "identify-1-2.json"),
+				Check: resource.ComposeTestCheckFunc(
+					testAccCheckTrackingPlanExists(resourceName, &tp),
+					testAccCheckTrackingPlanDisappears(&tp),
+				),
+				ExpectNonEmptyPlan: true,
+			},
 		},
 	})
 }
@@ -154,6 +194,13 @@ func testAccCheckTrackingPlanExists(name string, tp *segmentapi.TrackingPlan) re
 		*tp = resp
 
 		return nil
+	}
+}
+
+func testAccCheckTrackingPlanDisappears(tp *segmentapi.TrackingPlan) resource.TestCheckFunc {
+	return func(s *terraform.State) error {
+		client := testAccProvider.Meta().(*segmentapi.Client)
+		return client.DeleteTrackingPlan(segment.TrackingPlanNameToId(tp.Name))
 	}
 }
 

@@ -1,199 +1,218 @@
 package segment
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
-	"strings"
-
 	"github.com/forteilgmbh/segment-config-go/segment"
+	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
+	"strings"
 )
 
 func resourceSegmentTrackingPlan() *schema.Resource {
 	return &schema.Resource{
 		Schema: map[string]*schema.Schema{
 			"display_name": {
-				Type:     schema.TypeString,
-				Required: true,
-				ForceNew: false,
+				Description: `Display name of the tracking plan`,
+				Type:        schema.TypeString,
+				Required:    true,
+				ForceNew:    false,
 			},
 			"name": {
-				Type:     schema.TypeString,
-				Computed: true,
-				ForceNew: true,
+				Description: `Full name of the tracking plan (e.g. "workspaces/myworkspace/tracking-plans/rs_123")`,
+				Type:        schema.TypeString,
+				Computed:    true,
+				ForceNew:    true,
 			},
 			"rules_global": {
-				Type:      schema.TypeString,
-				Optional:  true,
-				StateFunc: sanitizedSegmentRule,
+				Description: `Rules applied to all messages as JSON-encoded string`,
+				Type:        schema.TypeString,
+				Optional:    true,
+				StateFunc:   sanitizedSegmentRule,
 			},
 			"rules_identify": {
-				Type:      schema.TypeString,
-				Optional:  true,
-				StateFunc: sanitizedSegmentRule,
+				Description: `Rules applied to Identify calls as JSON-encoded string`,
+				Type:        schema.TypeString,
+				Optional:    true,
+				StateFunc:   sanitizedSegmentRule,
 			},
 			"rules_group": {
-				Type:      schema.TypeString,
-				Optional:  true,
-				StateFunc: sanitizedSegmentRule,
+				Description: `Rules applied to Group calls as JSON-encoded string`,
+				Type:        schema.TypeString,
+				Optional:    true,
+				StateFunc:   sanitizedSegmentRule,
 			},
 			"rules_events": {
-				Type:     schema.TypeList,
-				Optional: true,
+				Description: `Rules applied to Track calls as list of JSON-encoded strings`,
+				Type:        schema.TypeList,
+				Optional:    true,
 				Elem: &schema.Schema{
 					StateFunc: sanitizedSegmentEvent,
 					Type:      schema.TypeString,
 				},
 			},
 		},
-		Create: resourceSegmentTrackingPlanCreate,
-		Read:   resourceSegmentTrackingPlanRead,
-		Delete: resourceSegmentTrackingPlanDelete,
-		Update: resourceSegmentTrackingPlanUpdate,
+		CreateContext: resourceSegmentTrackingPlanCreate,
+		ReadContext:   resourceSegmentTrackingPlanRead,
+		DeleteContext: resourceSegmentTrackingPlanDelete,
+		UpdateContext: resourceSegmentTrackingPlanUpdate,
 		Importer: &schema.ResourceImporter{
-			State: resourceSegmentTrackingPlanImport,
+			StateContext: schema.ImportStatePassthroughContext,
 		},
 	}
 }
 
-func resourceSegmentTrackingPlanCreate(r *schema.ResourceData, meta interface{}) error {
+func resourceSegmentTrackingPlanCreate(c context.Context, r *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	client := meta.(*segment.Client)
 
 	displayName := r.Get("display_name").(string)
-	rules := &segment.RuleSet{}
 
+	rules := &segment.RuleSet{}
 	if tfRule, ok := r.GetOk("rules_global"); ok {
 		rule, err := fromTfStateToRule(tfRule)
 		if err != nil {
-			return fmt.Errorf("error creating tracking plan %q: invalid \"global\" rules: %w", displayName, err)
+			return diag.Errorf("invalid \"global\" rules: %s", err)
 		}
 		rules.Global = &rule
 	}
 	if tfRule, ok := r.GetOk("rules_identify"); ok {
 		rule, err := fromTfStateToRule(tfRule)
 		if err != nil {
-			return fmt.Errorf("error creating tracking plan %q: invalid \"identify\" rules: %w", displayName, err)
+			return diag.Errorf("invalid \"identify\" rules: %s", err)
 		}
 		rules.Identify = &rule
 	}
 	if tfRule, ok := r.GetOk("rules_group"); ok {
 		rule, err := fromTfStateToRule(tfRule)
 		if err != nil {
-			return fmt.Errorf("error creating tracking plan %q: invalid \"group\" rules: %w", displayName, err)
+			return diag.Errorf("invalid \"group\" rules: %s", err)
 		}
 		rules.Group = &rule
 	}
 	if tfEvents, ok := r.GetOk("rules_events"); ok {
 		events, err := fromTfStateToEvents(tfEvents)
 		if err != nil {
-			return fmt.Errorf("error creating tracking plan %q: invalid \"events\" rules: %w", displayName, err)
+			return diag.Errorf("invalid \"events\" rules: %s", err)
 		}
 		rules.Events = events
 	}
 
 	trackingPlan, err := client.CreateTrackingPlan(segment.TrackingPlan{DisplayName: displayName, Rules: *rules})
 	if err != nil {
-		return fmt.Errorf("error creating tracking plan %q: %w", displayName, err)
+		return diag.FromErr(err)
 	}
 
-	planName := parseNameID(trackingPlan.Name)
-	r.SetId(planName)
-	return resourceSegmentTrackingPlanRead(r, meta)
+	planId := TrackingPlanNameToId(trackingPlan.Name)
+	r.SetId(planId)
+
+	return resourceSegmentTrackingPlanRead(c, r, meta)
 }
 
-func resourceSegmentTrackingPlanRead(r *schema.ResourceData, meta interface{}) error {
+func resourceSegmentTrackingPlanRead(c context.Context, r *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	client := meta.(*segment.Client)
-	planName := r.Id()
+	planId := r.Id()
 	names, err := getTrackingPlansNames(client)
 	if err != nil {
-		return fmt.Errorf("error reading tracking plan %q: %w", planName, err)
+		return diag.FromErr(err)
 	}
-	if _, ok := names[planName]; !ok {
+	if _, ok := names[planId]; !ok {
 		r.SetId("")
 		return nil
 	}
-	trackingPlan, err := client.GetTrackingPlan(planName)
+	trackingPlan, err := client.GetTrackingPlan(planId)
 	if err != nil {
-		return fmt.Errorf("error reading tracking plan %q: %w", planName, err)
+		return diag.FromErr(err)
 	}
 
-	r.Set("display_name", trackingPlan.DisplayName)
-	r.Set("name", planName)
+	if err := r.Set("display_name", trackingPlan.DisplayName); err != nil {
+		return diag.FromErr(err)
+	}
+	if err := r.Set("name", trackingPlan.Name); err != nil {
+		return diag.FromErr(err)
+	}
 
 	if _, ok := r.GetOk("rules_global"); ok {
-		r.Set("rules_global", toTfState(trackingPlan.Rules.Global))
+		if err := r.Set("rules_global", toTfState(trackingPlan.Rules.Global)); err != nil {
+			return diag.FromErr(err)
+		}
 	}
 	if _, ok := r.GetOk("rules_identify"); ok {
-		r.Set("rules_identify", toTfState(trackingPlan.Rules.Identify))
+		if err := r.Set("rules_identify", toTfState(trackingPlan.Rules.Identify)); err != nil {
+			return diag.FromErr(err)
+		}
 	}
 	if _, ok := r.GetOk("rules_group"); ok {
-		r.Set("rules_group", toTfState(trackingPlan.Rules.Group))
+		if err := r.Set("rules_group", toTfState(trackingPlan.Rules.Group)); err != nil {
+			return diag.FromErr(err)
+		}
 	}
 	if _, ok := r.GetOk("rules_events"); ok {
 		events := make([]interface{}, 0, len(trackingPlan.Rules.Events))
 		for _, e := range trackingPlan.Rules.Events {
 			events = append(events, toTfState(e))
 		}
-		r.Set("rules_events", events)
+		if err := r.Set("rules_events", events); err != nil {
+			return diag.FromErr(err)
+		}
 	}
 
 	return nil
 }
 
-func resourceSegmentTrackingPlanDelete(r *schema.ResourceData, meta interface{}) error {
+func resourceSegmentTrackingPlanDelete(c context.Context, r *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	client := meta.(*segment.Client)
-	planName := r.Id()
-	err := client.DeleteTrackingPlan(planName)
+	planId := r.Id()
+	err := client.DeleteTrackingPlan(planId)
 	if err != nil {
-		return fmt.Errorf("ERROR Deleting Tracking Plan!! PlanName: %q; err: %v", planName, err)
+		return diag.FromErr(err)
 	}
-
 	return nil
 }
 
-func resourceSegmentTrackingPlanUpdate(r *schema.ResourceData, meta interface{}) error {
+func resourceSegmentTrackingPlanUpdate(c context.Context, r *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	client := meta.(*segment.Client)
-	planName := r.Id()
+	planId := r.Id()
 	displayName := r.Get("display_name").(string)
 
 	names, err := getTrackingPlansNames(client)
 	if err != nil {
-		return fmt.Errorf("error updating tracking plan %q: %w", planName, err)
+		return diag.FromErr(err)
 	}
-	if _, ok := names[planName]; !ok {
-		return fmt.Errorf("error updating tracking plan %q: plan no longer exists", planName)
+	if _, ok := names[planId]; !ok {
+		return diag.Errorf("plan no longer exists")
 	}
-	trackingPlan, err := client.GetTrackingPlan(planName)
+	trackingPlan, err := client.GetTrackingPlan(planId)
 	if err != nil {
-		return fmt.Errorf("error updating tracking plan %q: %w", planName, err)
+		return diag.FromErr(err)
 	}
 	rules := trackingPlan.Rules
 
 	if tfRule, ok := r.GetOk("rules_global"); ok {
 		rule, err := fromTfStateToRule(tfRule)
 		if err != nil {
-			return fmt.Errorf("error updating tracking plan %q: invalid \"global\" rules: %w", displayName, err)
+			return diag.Errorf("invalid \"global\" rules: %s", err)
 		}
 		rules.Global = &rule
 	}
 	if tfRule, ok := r.GetOk("rules_identify"); ok {
 		rule, err := fromTfStateToRule(tfRule)
 		if err != nil {
-			return fmt.Errorf("error updating tracking plan %q: invalid \"identify\" rules: %w", displayName, err)
+			return diag.Errorf("invalid \"identify\" rules: %s", err)
 		}
 		rules.Identify = &rule
 	}
 	if tfRule, ok := r.GetOk("rules_group"); ok {
 		rule, err := fromTfStateToRule(tfRule)
 		if err != nil {
-			return fmt.Errorf("error updating tracking plan %q: invalid \"group\" rules: %w", displayName, err)
+			return diag.Errorf("invalid \"group\" rules: %s", err)
 		}
 		rules.Group = &rule
 	}
 	if tfEvents, ok := r.GetOk("rules_events"); ok {
 		events, err := fromTfStateToEvents(tfEvents)
 		if err != nil {
-			return fmt.Errorf("error updating tracking plan %q: invalid \"events\" rules: %w", displayName, err)
+			return diag.Errorf("invalid \"events\" rules: %s", err)
 		}
 		rules.Events = events
 	}
@@ -202,49 +221,14 @@ func resourceSegmentTrackingPlanUpdate(r *schema.ResourceData, meta interface{})
 		DisplayName: displayName,
 		Rules:       rules,
 	}
-	_, err = client.UpdateTrackingPlan(planName, updatedPlan)
+	_, err = client.UpdateTrackingPlan(planId, updatedPlan)
 	if err != nil {
-		return fmt.Errorf("error updating tracking plan %q: %w", planName, err)
+		return diag.FromErr(err)
 	}
-	return resourceSegmentTrackingPlanRead(r, meta)
+	return resourceSegmentTrackingPlanRead(c, r, meta)
 }
 
-func resourceSegmentTrackingPlanImport(r *schema.ResourceData, meta interface{}) ([]*schema.ResourceData, error) {
-	client := meta.(*segment.Client)
-	planName := r.Id()
-	names, err := getTrackingPlansNames(client)
-	if err != nil {
-		return nil, fmt.Errorf("error importing tracking plan %q: %w", planName, err)
-	}
-	if _, ok := names[planName]; !ok {
-		r.SetId("")
-		return nil, fmt.Errorf("error importing tracking plan %q: plan does not exist", planName)
-	}
-	trackingPlan, err := client.GetTrackingPlan(planName)
-	if err != nil {
-		return nil, fmt.Errorf("error importing tracking plan %q: %w", planName, err)
-	}
-
-	r.Set("display_name", trackingPlan.DisplayName)
-	r.Set("name", planName)
-
-	r.Set("rules_global", toTfState(trackingPlan.Rules.Global))
-	r.Set("rules_identify", toTfState(trackingPlan.Rules.Identify))
-	r.Set("rules_group", toTfState(trackingPlan.Rules.Group))
-
-	events := make([]interface{}, 0, len(trackingPlan.Rules.Events))
-	for _, e := range trackingPlan.Rules.Events {
-		events = append(events, toTfState(e))
-	}
-	r.Set("rules_events", events)
-
-	results := make([]*schema.ResourceData, 1)
-	results[0] = r
-
-	return results, nil
-}
-
-func parseNameID(name string) string {
+func TrackingPlanNameToId(name string) string {
 	nameSplit := strings.Split(name, "/")
 	return nameSplit[len(nameSplit)-1]
 }
@@ -256,7 +240,7 @@ func getTrackingPlansNames(client *segment.Client) (map[string]string, error) {
 	}
 	names := make(map[string]string)
 	for _, element := range plans.TrackingPlans {
-		id := parseNameID(element.Name)
+		id := TrackingPlanNameToId(element.Name)
 		names[id] = element.Name
 	}
 	return names, nil
