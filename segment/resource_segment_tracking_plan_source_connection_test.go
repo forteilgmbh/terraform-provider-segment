@@ -25,6 +25,32 @@ func TestAccSegmentTrackingPlanSourceConnection_basic(t *testing.T) {
 					testAccCheckTrackingPlanSourceConnectionExists("segment_tracking_plan_source_connection.test"),
 				),
 			},
+			{
+				ResourceName:      "segment_tracking_plan_source_connection.test",
+				ImportState:       true,
+				ImportStateVerify: true,
+			},
+		},
+	})
+}
+
+func TestAccSegmentTrackingPlanSourceConnection_disappears(t *testing.T) {
+	srcName := acctest.RandomWithPrefix("tf-testacc-tpsc-disappears")
+	tpName := acctest.RandomWithPrefix("tf-testacc-tpsc-disappears")
+
+	resource.ParallelTest(t, resource.TestCase{
+		PreCheck:          func() { testAccPreCheck(t) },
+		ProviderFactories: testAccProviders,
+		CheckDestroy:      testAccCheckSegmentTrackingPlanSourceConnectionDestroy,
+		Steps: []resource.TestStep{
+			{
+				Config: testAccSegmentTrackingPlanSourceConnectionConfig_basic(srcName, tpName),
+				Check: resource.ComposeTestCheckFunc(
+					testAccCheckTrackingPlanSourceConnectionExists("segment_tracking_plan_source_connection.test"),
+					testAccCheckTrackingPlanSourceConnectionDisappears("segment_tracking_plan_source_connection.test"),
+				),
+				ExpectNonEmptyPlan: true,
+			},
 		},
 	})
 }
@@ -37,8 +63,8 @@ func testAccCheckSegmentTrackingPlanSourceConnectionDestroy(s *terraform.State) 
 			continue
 		}
 
-		planId, srcName := segment.SplitTrackingPlanSourceConnectionId(rs.Primary.ID)
-		ok, err := segment.FindTrackingPlanSourceConnection(client, planId, srcName)
+		planId, srcSlug := segment.SplitTrackingPlanSourceConnectionId(rs.Primary.ID)
+		ok, err := segment.FindTrackingPlanSourceConnection(client, planId, srcSlug)
 		if ok {
 			return fmt.Errorf("tracking plan source connection %q still exists", rs.Primary.ID)
 		}
@@ -57,10 +83,10 @@ func testAccCheckTrackingPlanSourceConnectionExists(name string) resource.TestCh
 		if rs.Primary.ID == "" {
 			return fmt.Errorf("tracking plan source connection %q has no ID set", name)
 		}
-		planId, srcName := segment.SplitTrackingPlanSourceConnectionId(rs.Primary.ID)
+		planId, srcSlug := segment.SplitTrackingPlanSourceConnectionId(rs.Primary.ID)
 
 		client := testAccProvider.Meta().(*segmentapi.Client)
-		ok, err := segment.FindTrackingPlanSourceConnection(client, planId, srcName)
+		ok, err := segment.FindTrackingPlanSourceConnection(client, planId, srcSlug)
 		if err != nil {
 			return err
 		}
@@ -71,6 +97,15 @@ func testAccCheckTrackingPlanSourceConnectionExists(name string) resource.TestCh
 	}
 }
 
+func testAccCheckTrackingPlanSourceConnectionDisappears(name string) resource.TestCheckFunc {
+	return func(s *terraform.State) error {
+		rs := s.RootModule().Resources[name]
+		planId, srcSlug := segment.SplitTrackingPlanSourceConnectionId(rs.Primary.ID)
+		client := testAccProvider.Meta().(*segmentapi.Client)
+		return client.DeleteTrackingPlanSourceConnection(planId, srcSlug)
+	}
+}
+
 func testAccSegmentTrackingPlanSourceConnectionConfig_basic(srcName, tpName string) string {
 	return configCompose(
 		testAccSegmentSourceConfig_basic(srcName, "catalog/sources/net"),
@@ -78,7 +113,7 @@ func testAccSegmentTrackingPlanSourceConnectionConfig_basic(srcName, tpName stri
 		`
 resource "segment_tracking_plan_source_connection" "test" {
   tracking_plan_id = segment_tracking_plan.test.id
-  source_name      = segment_source.test.id
+  source_slug      = segment_source.test.slug
 }
 `)
 }

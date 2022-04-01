@@ -1,7 +1,9 @@
 package segment
 
 import (
+	"context"
 	"fmt"
+	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
 	"strings"
 
 	"github.com/forteilgmbh/segment-config-go/segment"
@@ -12,99 +14,84 @@ func resourceSegmentTrackingPlanSourceConnection() *schema.Resource {
 	return &schema.Resource{
 		Schema: map[string]*schema.Schema{
 			"tracking_plan_id": {
-				Type:     schema.TypeString,
-				Required: true,
-				ForceNew: true,
+				Description: `Unique ID of the tracking plan (e.g. "rs_123")`,
+				Type:        schema.TypeString,
+				Required:    true,
+				ForceNew:    true,
 			},
-			"source_name": {
-				Type:     schema.TypeString,
-				Required: true,
-				ForceNew: true,
+			"source_slug": {
+				Description: `Short name of the source (e.g. "ios")`,
+				Type:        schema.TypeString,
+				Required:    true,
+				ForceNew:    true,
 			},
 		},
-		Create: resourceSegmentTrackingPlanSourceConnectionCreate,
-		Read:   resourceSegmentTrackingPlanSourceConnectionRead,
-		Delete: resourceSegmentTrackingPlanSourceConnectionDelete,
+		CreateContext: resourceSegmentTrackingPlanSourceConnectionCreate,
+		ReadContext:   resourceSegmentTrackingPlanSourceConnectionRead,
+		DeleteContext: resourceSegmentTrackingPlanSourceConnectionDelete,
 		Importer: &schema.ResourceImporter{
-			State: resourceSegmentTrackingPlanSourceConnectionImport,
+			StateContext: schema.ImportStatePassthroughContext,
 		},
 	}
 }
 
-func resourceSegmentTrackingPlanSourceConnectionCreate(r *schema.ResourceData, meta interface{}) error {
+func resourceSegmentTrackingPlanSourceConnectionCreate(c context.Context, r *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	client := meta.(*segment.Client)
 	planId := r.Get("tracking_plan_id").(string)
-	srcName := r.Get("source_name").(string)
-	srcSlug := IdToName(srcName)
+	srcSlug := r.Get("source_slug").(string)
 
 	err := client.CreateTrackingPlanSourceConnection(planId, srcSlug)
 	if err != nil {
-		return fmt.Errorf("error creating TrackingPlanSourceConnection: TrackingPlan: %q; Source: %q; err: %v", planId, srcName, err)
+		return diag.FromErr(err)
 	}
-	id := createTrackingPlanSourceConnectionId(planId, srcName)
+	id := createTrackingPlanSourceConnectionId(planId, srcSlug)
 	r.SetId(id)
 
-	return resourceSegmentTrackingPlanSourceConnectionRead(r, meta)
+	return resourceSegmentTrackingPlanSourceConnectionRead(c, r, meta)
 }
 
-func resourceSegmentTrackingPlanSourceConnectionRead(r *schema.ResourceData, meta interface{}) error {
+func resourceSegmentTrackingPlanSourceConnectionRead(c context.Context, r *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	client := meta.(*segment.Client)
-	planId, srcName := SplitTrackingPlanSourceConnectionId(r.Id())
+	planId, srcSlug := SplitTrackingPlanSourceConnectionId(r.Id())
 
-	ok, err := FindTrackingPlanSourceConnection(client, planId, srcName)
+	ok, err := FindTrackingPlanSourceConnection(client, planId, srcSlug)
 	if err != nil {
-		return fmt.Errorf("error reading TrackingPlanSourceConnection: %w", err)
+		if IsNotFoundErr(err) {
+			r.SetId("")
+			return nil
+		} else {
+			return diag.FromErr(err)
+		}
 	}
 	if !ok {
 		r.SetId("")
 		return nil
 	}
 
-	r.Set("tracking_plan_id", planId)
-	r.Set("source_name", srcName)
+	if err := r.Set("tracking_plan_id", planId); err != nil {
+		return diag.FromErr(err)
+	}
+	if err := r.Set("source_slug", srcSlug); err != nil {
+		return diag.FromErr(err)
+	}
 
 	return nil
 }
 
-func resourceSegmentTrackingPlanSourceConnectionDelete(r *schema.ResourceData, meta interface{}) error {
+func resourceSegmentTrackingPlanSourceConnectionDelete(c context.Context, r *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	client := meta.(*segment.Client)
-	id := r.Id()
-	planId := r.Get("tracking_plan_id").(string)
-	srcName := r.Get("source_name").(string)
-	srcSlug := IdToName(id)
+	planId, srcSlug := SplitTrackingPlanSourceConnectionId(r.Id())
 
 	err := client.DeleteTrackingPlanSourceConnection(planId, srcSlug)
 	if err != nil {
-		return fmt.Errorf("error deleting TrackingPlanSourceConnection: TrackingPlan: %q; Source: %q; err: %v", planId, srcName, err)
+		return diag.FromErr(err)
 	}
 
 	return nil
 }
 
-func resourceSegmentTrackingPlanSourceConnectionImport(r *schema.ResourceData, meta interface{}) ([]*schema.ResourceData, error) {
-	client := meta.(*segment.Client)
-	planId, srcName := SplitTrackingPlanSourceConnectionId(r.Id())
-
-	ok, err := FindTrackingPlanSourceConnection(client, planId, srcName)
-	if err != nil {
-		return nil, fmt.Errorf("error importing TrackingPlanSourceConnection: %w", err)
-	}
-	if !ok {
-		return nil, fmt.Errorf("error importing TrackingPlanSourceConnection %q: no source connection %q for tracking plan %q", r.Id(), srcName, planId)
-	}
-
-	r.SetId(r.Id())
-	r.Set("tracking_plan_id", planId)
-	r.Set("source_name", srcName)
-
-	results := make([]*schema.ResourceData, 1)
-	results[0] = r
-
-	return results, nil
-}
-
-func createTrackingPlanSourceConnectionId(planId, srcName string) string {
-	return fmt.Sprintf("%s|%s", planId, srcName)
+func createTrackingPlanSourceConnectionId(planId, srcSlug string) string {
+	return fmt.Sprintf("%s|%s", planId, srcSlug)
 }
 
 func SplitTrackingPlanSourceConnectionId(id string) (planId, srcName string) {
@@ -112,13 +99,13 @@ func SplitTrackingPlanSourceConnectionId(id string) (planId, srcName string) {
 	return s[0], s[1]
 }
 
-func FindTrackingPlanSourceConnection(client *segment.Client, planId, srcName string) (bool, error) {
+func FindTrackingPlanSourceConnection(client *segment.Client, planId, srcSlug string) (bool, error) {
 	trackingPlanSourceConnections, err := client.ListTrackingPlanSources(planId)
 	if err != nil {
 		return false, fmt.Errorf("cannot fetch source connections for tracking plan %q: %w", planId, err)
 	}
 	for _, sc := range trackingPlanSourceConnections {
-		if sc.TrackingPlanId == planId && sc.Source == srcName {
+		if sc.TrackingPlanId == planId && strings.HasSuffix(sc.Source, srcSlug) {
 			return true, nil
 		}
 	}
