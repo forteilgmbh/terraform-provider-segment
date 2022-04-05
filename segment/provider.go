@@ -24,6 +24,7 @@ func Provider() *schema.Provider {
 		ResourcesMap: map[string]*schema.Resource{
 			"segment_source":                          resourceSegmentSource(),
 			"segment_destination":                     resourceSegmentDestination(),
+			"segment_destination_filter":              resourceSegmentDestinationFilter(),
 			"segment_tracking_plan":                   resourceSegmentTrackingPlan(),
 			"segment_tracking_plan_source_connection": resourceSegmentTrackingPlanSourceConnection(),
 		},

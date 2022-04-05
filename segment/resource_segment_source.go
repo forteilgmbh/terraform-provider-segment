@@ -88,16 +88,10 @@ func resourceSegmentSourceDelete(c context.Context, r *schema.ResourceData, meta
 	return nil
 }
 
-func IdToName(id string) string {
-	splitID := strings.Split(id, "/")
-
-	return splitID[len(splitID)-1]
-}
-
 func SourceSlugToName(workspace, slug string) string {
 	return fmt.Sprintf("workspaces/%s/sources/%s", workspace, slug)
 }
 
 func SourceNameToSlug(name string) string {
-	return strings.SplitN(name, "/", 4)[3]
+	return strings.Split(name, "/")[3]
 }

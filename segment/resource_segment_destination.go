@@ -214,9 +214,9 @@ func flattenDestinationConfigs(dcs []segment.DestinationConfig) ([]interface{}, 
 }
 
 func DestinationNameToSlug(name string) string {
-	return strings.SplitN(name, "/", 6)[5]
+	return strings.Split(name, "/")[5]
 }
 
 func DestinationNameToSourceSlug(name string) string {
-	return strings.SplitN(name, "/", 5)[3]
+	return strings.Split(name, "/")[3]
 }

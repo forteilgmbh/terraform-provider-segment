@@ -229,8 +229,7 @@ func resourceSegmentTrackingPlanUpdate(c context.Context, r *schema.ResourceData
 }
 
 func TrackingPlanNameToId(name string) string {
-	nameSplit := strings.Split(name, "/")
-	return nameSplit[len(nameSplit)-1]
+	return strings.Split(name, "/")[3]
 }
 
 func getTrackingPlansNames(client *segment.Client) (map[string]string, error) {
