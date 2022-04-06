@@ -39,6 +39,19 @@ func Is500ValidatePermissionsErr(err error) bool {
 	return false
 }
 
+func Is500NilDereferenceErr(err error) bool {
+	// another special case, for source schema config: Segment API returns 500 with nil dereference error xD
+	if err == nil {
+		return false
+	}
+	if apiErr, ok := err.(*segment.SegmentApiError); ok {
+		if apiErr.Code == 13 && strings.Contains(apiErr.Message, "runtime error: invalid memory address or nil pointer dereference") {
+			return true
+		}
+	}
+	return false
+}
+
 func IsNilOrZeroValue(v interface{}) bool {
 	return v == nil || reflect.DeepEqual(v, reflect.Zero(reflect.TypeOf(v)).Interface())
 }
