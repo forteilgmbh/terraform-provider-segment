@@ -195,11 +195,16 @@ func flattenDestinationConfigs(dcs []segment.DestinationConfig) ([]interface{}, 
 			c := make(map[string]interface{})
 
 			if !IsNilOrZeroValue(dc.Value) {
-				v, err := json.Marshal(dc.Value)
-				if err != nil {
-					return nil, fmt.Errorf("cannot flatten configs: %w", err)
+				switch v := dc.Value.(type) {
+				case string:
+					c["value"] = v
+				default:
+					jsonVal, err := json.Marshal(dc.Value)
+					if err != nil {
+						return nil, fmt.Errorf("cannot flatten configs: %w", err)
+					}
+					c["value"] = string(jsonVal)
 				}
-				c["value"] = string(v)
 			}
 			c["name"] = dc.Name
 			c["type"] = dc.Type

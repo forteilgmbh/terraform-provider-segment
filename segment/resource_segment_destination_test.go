@@ -160,7 +160,7 @@ func testAccCheckDestinationAttributes_webhook(name string, destination *segment
 			return fmt.Errorf("not found correct Config (hooks) in destination.Configs: %+v", destination.Configs)
 		}
 		if !anyDestinationConfigValid(destination.Configs, func(c segmentapi.DestinationConfig) bool {
-			return c.Name == rs.Primary.ID+"/config/sharedSecret" && c.Type == "string" && c.Value == ""
+			return c.Name == rs.Primary.ID+"/config/sharedSecret" && c.Type == "string" && c.Value == "secretValue"
 		}) {
 			return fmt.Errorf("not found correct Config (sharedSecret) in destination.Configs: %+v", destination.Configs)
 		}
@@ -185,7 +185,7 @@ func testAccCheckDestinationConfigs_webhook(resourceName, srcSlug, endpoint stri
 		}
 		sharedSecret := map[string]string{
 			"name":  configBaseName + "sharedSecret",
-			"value": "",
+			"value": "secretValue",
 			"type":  "string",
 		}
 
@@ -230,7 +230,7 @@ resource "segment_destination" "test" {
   }
   configs {
     name  = "${segment_source.test.id}/destinations/webhooks/config/sharedSecret"
-    value = ""
+    value = "secretValue"
     type  = "string"
   }
 }
