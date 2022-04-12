@@ -288,7 +288,7 @@ func extractDestinationFiltersActions(s *schema.Set) segment.DestinationFilterAc
 			))
 		case "blacklist_fields":
 			f := a["fields"].(*schema.Set).List()[0].(map[string]interface{})
-			actions = append(actions, segment.NewAllowListEventAction(
+			actions = append(actions, segment.NewBlockListEventAction(
 				extractDestinationFiltersActionsFields(f["properties"]),
 				extractDestinationFiltersActionsFields(f["context"]),
 				extractDestinationFiltersActionsFields(f["traits"]),

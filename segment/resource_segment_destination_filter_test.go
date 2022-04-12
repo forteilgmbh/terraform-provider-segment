@@ -13,7 +13,7 @@ import (
 )
 
 func TestAccSegmentDestinationFilter_basic(t *testing.T) {
-	var dfBefore, dfAfter segmentapi.DestinationFilter
+	var dfBefore, dfAfter, df3 segmentapi.DestinationFilter
 	resourceName := "segment_destination_filter.test"
 	srcSlug := acctest.RandomWithPrefix("tf-testacc-df-basic")
 	dfTitle := acctest.RandomWithPrefix("tf-testacc-df-basic")
@@ -45,7 +45,7 @@ func TestAccSegmentDestinationFilter_basic(t *testing.T) {
 				),
 			},
 			{
-				Config: testAccSegmentDestinationFilterConfig_basic_sample_whitelist(srcSlug, dfTitle),
+				Config: testAccSegmentDestinationFilterConfig_basic_sample_fieldlist(srcSlug, dfTitle, "white"),
 				Check: resource.ComposeTestCheckFunc(
 					testAccCheckDestinationFilterExists("segment_destination_filter.test", &dfAfter),
 					testAccCheckDestinationFilterAttributes_basic(&dfAfter, resourceName, dfTitle, false, segmentapi.DestinationFilterActionTypeSampling, segmentapi.DestinationFilterActionTypeAllowList),
@@ -64,6 +64,36 @@ func TestAccSegmentDestinationFilter_basic(t *testing.T) {
 					}),
 					resource.TestCheckTypeSetElemNestedAttrs(resourceName, "action.*", map[string]string{
 						"type":                  "whitelist_fields",
+						"fields.#":              "1",
+						"fields.0.context.#":    "0",
+						"fields.0.properties.#": "2",
+						"fields.0.properties.0": "foo",
+						"fields.0.properties.1": "bar",
+						"fields.0.traits.#":     "1",
+						"fields.0.traits.0":     "baz",
+					}),
+				),
+			},
+			{
+				Config: testAccSegmentDestinationFilterConfig_basic_sample_fieldlist(srcSlug, dfTitle, "black"),
+				Check: resource.ComposeTestCheckFunc(
+					testAccCheckDestinationFilterExists("segment_destination_filter.test", &df3),
+					testAccCheckDestinationFilterAttributes_basic(&df3, resourceName, dfTitle, false, segmentapi.DestinationFilterActionTypeSampling, segmentapi.DestinationFilterActionTypeBlockList),
+					resource.TestMatchResourceAttr(resourceName, "id", dfIdRegexp),
+					resource.TestCheckResourceAttr(resourceName, "source_slug", srcSlug),
+					resource.TestCheckResourceAttr(resourceName, "destination_slug", "webhooks"),
+					resource.TestMatchResourceAttr(resourceName, "name", dfNameRegexp),
+					resource.TestCheckResourceAttr(resourceName, "title", dfTitle),
+					resource.TestCheckResourceAttr(resourceName, "description", ""),
+					resource.TestCheckResourceAttr(resourceName, "enabled", "false"),
+					resource.TestCheckResourceAttr(resourceName, "conditions", "type = \"identify\""),
+					resource.TestCheckResourceAttr(resourceName, "action.#", "2"),
+					resource.TestCheckTypeSetElemNestedAttrs(resourceName, "action.*", map[string]string{
+						"type":    "sample_event",
+						"percent": "0.5",
+					}),
+					resource.TestCheckTypeSetElemNestedAttrs(resourceName, "action.*", map[string]string{
+						"type":                  "blacklist_fields",
 						"fields.#":              "1",
 						"fields.0.context.#":    "0",
 						"fields.0.properties.#": "2",
@@ -283,7 +313,7 @@ resource "segment_destination_filter" "test" {
 `, dfTitle))
 }
 
-func testAccSegmentDestinationFilterConfig_basic_sample_whitelist(srcSlug, dfTitle string) string {
+func testAccSegmentDestinationFilterConfig_basic_sample_fieldlist(srcSlug, dfTitle, action string) string {
 	return configCompose(
 		testAccSegmentDestinationConfig_webhook(srcSlug, true, "https://example.com/api/v1"),
 		fmt.Sprintf(`
@@ -302,7 +332,7 @@ resource "segment_destination_filter" "test" {
   }
 
   action {
-    type = "whitelist_fields"
+    type = "%slist_fields"
     
     fields {
       properties = ["foo", "bar"]
@@ -310,5 +340,5 @@ resource "segment_destination_filter" "test" {
     }
   }
 }
-`, dfTitle))
+`, dfTitle, action))
 }
