@@ -51,6 +51,8 @@ github.com/fatih/color v1.7.0/go.mod h1:Zm6kSWBoL9eyXnKyktHP6abPY2pDugNf5Kwzbycv
 github.com/flynn/go-shlex v0.0.0-20150515145356-3f9db97f8568/go.mod h1:xEzjJPgXI435gkrCt3MPfRiAkVrwSbHsst4LCFVfpJc=
 github.com/forteilgmbh/segment-config-go v0.2.1-0.20220406111207-e01b0253dea3 h1:mOrYlVHK0r/baLMlrP2zE/m8gvUOycfgGLj68FQApG0=
 github.com/forteilgmbh/segment-config-go v0.2.1-0.20220406111207-e01b0253dea3/go.mod h1:oEuTUt0Rio6KhZx6K7MqpWrO/hI6SGs9EFz0iiuCfr8=
+github.com/forteilgmbh/segment-config-go v0.2.1-0.20230105103044-a8c2cf134175 h1:mq3VH2zhr6WhGEAUj5BZtVSsGMZpluk00YW7xgGD/uU=
+github.com/forteilgmbh/segment-config-go v0.2.1-0.20230105103044-a8c2cf134175/go.mod h1:oEuTUt0Rio6KhZx6K7MqpWrO/hI6SGs9EFz0iiuCfr8=
 github.com/ghodss/yaml v1.0.0/go.mod h1:4dBDuWmgqj2HViK6kFavaiC9ZROes6MMH2rRYeMEF04=
 github.com/gliderlabs/ssh v0.2.2/go.mod h1:U7qILu1NlMHj9FlMhZLlkCdDnU1DBEAqr0aevW3Awn0=
 github.com/go-git/gcfg v1.5.0 h1:Q5ViNfGF8zFgyJWPqYwA7qGFoMTEiBmdlkcfRmpIMa4=
