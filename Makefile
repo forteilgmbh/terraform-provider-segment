@@ -1,5 +1,5 @@
 .EXPORT_ALL_VARIABLES:
-VERSION := 0.4.2
+VERSION := 0.4.3
 NAME := terraform-provider-segment_v${VERSION}
 BUILD_DIR := /usr/local/share/terraform/plugins/terraform.bonify.de/forteilgmbh/segment/${VERSION}/linux_amd64
 TARGET := ${BUILD_DIR}/${NAME}
